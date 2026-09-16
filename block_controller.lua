@@ -33,9 +33,9 @@ local sides = {
 
 while true do
     for _, side in ipairs(sides) do
-        local signal = redstone.getInput(side)
+        local signal = redstone.getAnalogInput(side)
 
-        if signal then
+        if signal > 0 then
             local block = config[side]
 
             if type(block) == "string"
@@ -49,7 +49,7 @@ while true do
                     block
                 )
 
-                while redstone.getInput(side) do
+                while redstone.getAnalogInput(side) > 0 do
                     sleep(0.05)
                 end
             end
