@@ -23,6 +23,30 @@ local function lockScreen()
     end
 end
 
+local function errorScreen(message)
+    term.setBackgroundColor(colors.white)
+    term.setTextColor(colors.red)
+    term.clear()
+    term.setCursorPos(1, 1)
+
+    local width, height = term.getSize()
+
+    local title = "SYSTEM ERROR"
+
+    local x1 = math.floor((width - #title) / 2) + 1
+    local x2 = math.floor((width - #message) / 2) + 1
+
+    term.setCursorPos(x1, math.floor(height / 2) - 1)
+    term.write(title)
+
+    term.setCursorPos(x2, math.floor(height / 2) + 1)
+    term.write(message)
+
+    while true do
+        os.pullEventRaw()
+    end
+end
+
 if not isCommandComputer() then
     lockScreen()
 end
@@ -37,55 +61,6 @@ local sides = {
     "top",
     "bottom"
 }
-
-local previous = {}
-
-for _, side in ipairs(sides) do
-    previous[side] = redstone.getInput(side)
-end
-
-local function getComputerPosition()
-    if type(commands.getBlockPosition) ~= "function" then
-        return nil
-    end
-
-    local x, y, z = commands.getBlockPosition()
-
-    if type(x) ~= "number"
-        or type(y) ~= "number"
-        or type(z) ~= "number" then
-        return nil
-    end
-
-    return x, y, z
-end
-
-local function getComputerFacing()
-    if type(commands.getBlockPosition) ~= "function"
-        or type(commands.getBlockInfo) ~= "function" then
-        return nil
-    end
-
-    local x, y, z = commands.getBlockPosition()
-
-    local ok, info = pcall(function()
-        return commands.getBlockInfo(x, y, z)
-    end)
-
-    if not ok or type(info) ~= "table" then
-        return nil
-    end
-
-    if type(info.state) ~= "table" then
-        return nil
-    end
-
-    if type(info.state.facing) == "string" then
-        return info.state.facing
-    end
-
-    return nil
-end
 
 local function placeBlock(side)
     local block = config[side]
@@ -102,74 +77,49 @@ local function placeBlock(side)
         return
     end
 
-    local x, y, z = getComputerPosition()
+    local command =
+        "setblock ~ ~-1 ~ "
+        .. block
+        .. " replace"
 
-    if not x then
-        return
-    end
-
-    local targetY = y - 1
-    local facing = getComputerFacing()
-
-    local command
-
-    if facing then
-        command =
-            "setblock "
-            .. x
-            .. " "
-            .. targetY
-            .. " "
-            .. z
-            .. " "
-            .. block
-            .. "[facing="
-            .. facing
-            .. "] replace"
-    else
-        command =
-            "setblock "
-            .. x
-            .. " "
-            .. targetY
-            .. " "
-            .. z
-            .. " "
-            .. block
-            .. " replace"
-    end
-
-    local ok = pcall(function()
-        commands.exec(command)
+    local ok, output = pcall(function()
+        return commands.exec(command)
     end)
 
     if not ok then
-        pcall(function()
-            commands.exec(
-                "setblock "
-                .. x
-                .. " "
-                .. targetY
-                .. " "
-                .. z
-                .. " "
-                .. block
-                .. " replace"
-            )
-        end)
+        errorScreen(tostring(output))
+        return
+    end
+
+    if output == false then
+        local success, lines = commands.exec(command)
+
+        if not success then
+            local message = "SETBLOCK FAILED"
+
+            if type(lines) == "table" and #lines > 0 then
+                message = tostring(lines[1])
+            end
+
+            errorScreen(message)
+        end
+    end
+end
+
+for _, side in ipairs(sides) do
+    if redstone.getInput(side) then
+        placeBlock(side)
     end
 end
 
 while true do
-    for _, side in ipairs(sides) do
-        local current = redstone.getInput(side)
+    local event = { os.pullEvent() }
 
-        if current and not previous[side] then
-            placeBlock(side)
+    if event[1] == "redstone" then
+        for _, side in ipairs(sides) do
+            if redstone.getInput(side) then
+                placeBlock(side)
+            end
         end
-
-        previous[side] = current
     end
-
-    sleep(0.05)
 end
