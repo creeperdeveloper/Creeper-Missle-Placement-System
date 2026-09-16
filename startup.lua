@@ -1,4 +1,4 @@
-local REPOSITORY = "YOUR_GITHUB_USERNAME/YOUR_REPOSITORY"
+local REPOSITORY = "creeperdeveloper/Creeper-Missle-Placement-System"
 local BRANCH = "main"
 
 local LOCAL_VERSION = "/block_controller.version"
