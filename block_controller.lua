@@ -5,12 +5,12 @@ if type(commands) ~= "table"
     term.setTextColor(colors.black)
     term.clear()
 
-    local w, h = term.getSize()
+    local width, height = term.getSize()
     local text = "SYSTEM LOCKED"
 
     term.setCursorPos(
-        math.floor((w - #text) / 2) + 1,
-        math.floor(h / 2)
+        math.floor((width - #text) / 2) + 1,
+        math.floor(height / 2)
     )
 
     term.write(text)
@@ -22,19 +22,10 @@ end
 
 local config = dofile("/config.lua")
 
-local sides = {
-    "left",
-    "right",
-    "front",
-    "back",
-    "top",
-    "bottom"
-}
+local sides = redstone.getSides()
 
-local previous = {}
-
-for _, side in ipairs(sides) do
-    previous[side] = redstone.getInput(side)
+local function getSignal(side)
+    return redstone.getAnalogInput(side)
 end
 
 local function placeBlock(side)
@@ -44,7 +35,8 @@ local function placeBlock(side)
         return
     end
 
-    if block == "" or block == "minecraft:air" then
+    if block == ""
+        or block == "minecraft:air" then
         return
     end
 
@@ -56,16 +48,28 @@ local function placeBlock(side)
     )
 end
 
-while true do
-    for _, side in ipairs(sides) do
-        local current = redstone.getInput(side)
+local previous = {}
 
-        if current and not previous[side] then
+for _, side in ipairs(sides) do
+    previous[side] = getSignal(side)
+end
+
+for _, side in ipairs(sides) do
+    if previous[side] > 0 then
+        placeBlock(side)
+    end
+end
+
+while true do
+    os.pullEvent("redstone")
+
+    for _, side in ipairs(sides) do
+        local signal = getSignal(side)
+
+        if signal > 0 and previous[side] == 0 then
             placeBlock(side)
         end
 
-        previous[side] = current
+        previous[side] = signal
     end
-
-    sleep(0.05)
 end
