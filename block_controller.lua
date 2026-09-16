@@ -37,35 +37,28 @@ for _, side in ipairs(sides) do
     previous[side] = redstone.getInput(side)
 end
 
-local function placeBlock(side)
-    local block = config[side]
-
-    if type(block) ~= "string" then
-        return
-    end
-
-    if block == "" or block == "minecraft:air" then
-        return
-    end
-
-    commands.setblock(
-        "~",
-        "~-1",
-        "~",
-        block
-    )
-end
-
 while true do
-    os.pullEvent("redstone")
-
     for _, side in ipairs(sides) do
         local current = redstone.getInput(side)
 
-        if current and not previous[side] then
-            placeBlock(side)
+        if current ~= previous[side] and current > 0 then
+            local block = config[side]
+
+            if type(block) == "string"
+                and block ~= ""
+                and block ~= "minecraft:air" then
+
+                commands.setblock(
+                    "~",
+                    "~-1",
+                    "~",
+                    block
+                )
+            end
         end
 
         previous[side] = current
     end
+
+    sleep(0.05)
 end
