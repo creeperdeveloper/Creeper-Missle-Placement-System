@@ -31,17 +31,11 @@ local sides = {
     "bottom"
 }
 
-local previous = {}
-
-for _, side in ipairs(sides) do
-    previous[side] = redstone.getInput(side)
-end
-
 while true do
     for _, side in ipairs(sides) do
-        local current = redstone.getInput(side)
+        local signal = redstone.getInput(side)
 
-        if current ~= previous[side] and current > 0 then
+        if signal then
             local block = config[side]
 
             if type(block) == "string"
@@ -54,10 +48,12 @@ while true do
                     "~",
                     block
                 )
+
+                while redstone.getInput(side) do
+                    sleep(0.05)
+                end
             end
         end
-
-        previous[side] = current
     end
 
     sleep(0.05)
