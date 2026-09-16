@@ -1,4 +1,3 @@
-```lua
 local u="https://raw.githubusercontent.com/creeperdeveloper/Creeper-Missle-Placement-System/main/"
 local f={
  {"startup.lua","/startup.lua",true},
@@ -119,4 +118,3 @@ center(math.floor(h/2)+1,"Rebooting...")
 
 sleep(2)
 os.reboot()
-```
