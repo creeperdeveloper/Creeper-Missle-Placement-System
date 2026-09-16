@@ -1,6 +1,8 @@
 local function isCommandComputer()
     return type(commands) == "table"
         and type(commands.exec) == "function"
+        and type(commands.getBlockPosition) == "function"
+        and type(commands.getBlockInfo) == "function"
 end
 
 local function lockScreen()
@@ -44,7 +46,20 @@ for _, side in ipairs(sides) do
     previous[side] = redstone.getInput(side)
 end
 
-local function placeBlock(side, block)
+local function getComputerFacing()
+    local x, y, z = commands.getBlockPosition()
+    local info = commands.getBlockInfo(x, y, z)
+
+    if not info or not info.state then
+        return nil
+    end
+
+    return info.state.facing
+end
+
+local function placeBlock(side)
+    local block = config[side]
+
     if type(block) ~= "string" then
         return
     end
@@ -57,24 +72,16 @@ local function placeBlock(side, block)
         return
     end
 
-    local command
+    local facing = getComputerFacing()
 
-    if side == "front" then
-        command = "setblock ^ ^ ^1 " .. block .. " replace"
-    elseif side == "back" then
-        command = "setblock ^ ^ ^-1 " .. block .. " replace"
-    elseif side == "left" then
-        command = "setblock ^-1 ^ ^ " .. block .. " replace"
-    elseif side == "right" then
-        command = "setblock ^1 ^ ^ " .. block .. " replace"
-    elseif side == "top" then
-        command = "setblock ^ ^1 ^ " .. block .. " replace"
-    elseif side == "bottom" then
-        command = "setblock ^ ^-1 ^ " .. block .. " replace"
-    end
-
-    if command then
-        commands.exec(command)
+    if facing then
+        commands.exec(
+            "setblock ~ ~-1 ~ " .. block .. "[facing=" .. facing .. "] replace"
+        )
+    else
+        commands.exec(
+            "setblock ~ ~-1 ~ " .. block .. " replace"
+        )
     end
 end
 
@@ -83,7 +90,7 @@ while true do
         local current = redstone.getInput(side)
 
         if current and not previous[side] then
-            placeBlock(side, config[side])
+            placeBlock(side)
         end
 
         previous[side] = current
