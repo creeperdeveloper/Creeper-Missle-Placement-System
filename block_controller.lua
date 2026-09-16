@@ -1,8 +1,6 @@
 local function isCommandComputer()
     return type(commands) == "table"
         and type(commands.exec) == "function"
-        and type(commands.getBlockPosition) == "function"
-        and type(commands.getBlockInfo) == "function"
 end
 
 local function lockScreen()
@@ -46,26 +44,47 @@ for _, side in ipairs(sides) do
     previous[side] = redstone.getInput(side)
 end
 
-local function getComputerData()
+local function getComputerPosition()
+    if type(commands.getBlockPosition) ~= "function" then
+        return nil
+    end
+
     local x, y, z = commands.getBlockPosition()
 
-    if not x or not y or not z then
+    if type(x) ~= "number"
+        or type(y) ~= "number"
+        or type(z) ~= "number" then
         return nil
     end
 
-    local info = commands.getBlockInfo(x, y, z)
+    return x, y, z
+end
 
-    if not info then
+local function getComputerFacing()
+    if type(commands.getBlockPosition) ~= "function"
+        or type(commands.getBlockInfo) ~= "function" then
         return nil
     end
 
-    local facing
+    local x, y, z = commands.getBlockPosition()
 
-    if info.state then
-        facing = info.state.facing
+    local ok, info = pcall(function()
+        return commands.getBlockInfo(x, y, z)
+    end)
+
+    if not ok or type(info) ~= "table" then
+        return nil
     end
 
-    return x, y, z, facing
+    if type(info.state) ~= "table" then
+        return nil
+    end
+
+    if type(info.state.facing) == "string" then
+        return info.state.facing
+    end
+
+    return nil
 end
 
 local function placeBlock(side)
@@ -83,13 +102,14 @@ local function placeBlock(side)
         return
     end
 
-    local x, y, z, facing = getComputerData()
+    local x, y, z = getComputerPosition()
 
-    if not x or not y or not z then
+    if not x then
         return
     end
 
     local targetY = y - 1
+    local facing = getComputerFacing()
 
     local command
 
@@ -119,7 +139,25 @@ local function placeBlock(side)
             .. " replace"
     end
 
-    commands.exec(command)
+    local ok = pcall(function()
+        commands.exec(command)
+    end)
+
+    if not ok then
+        pcall(function()
+            commands.exec(
+                "setblock "
+                .. x
+                .. " "
+                .. targetY
+                .. " "
+                .. z
+                .. " "
+                .. block
+                .. " replace"
+            )
+        end)
+    end
 end
 
 while true do
