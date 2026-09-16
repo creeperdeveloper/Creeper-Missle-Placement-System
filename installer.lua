@@ -1,8 +1,7 @@
 local REPOSITORY = "creeperdeveloper/Creeper-Missle-Placement-System"
-
 local BRANCH = "main"
 
-local files = {
+local FILES = {
     {
         remote = "startup.lua",
         localPath = "/startup.lua"
@@ -21,187 +20,115 @@ local files = {
     }
 }
 
-local function clear()
-    term.setBackgroundColor(colors.white)
-    term.setTextColor(colors.black)
-    term.clear()
-    term.setCursorPos(1, 1)
+local function getUrl(file)
+    return "https://raw.githubusercontent.com/"
+        .. REPOSITORY
+        .. "/"
+        .. BRANCH
+        .. "/"
+        .. file
+        .. "?t="
+        .. tostring(os.epoch("utc"))
 end
 
 local function center(text, y)
     local width = term.getSize()
-    local x = math.floor((width - #text) / 2) + 1
 
-    term.setCursorPos(x, y)
+    term.setCursorPos(
+        math.max(1, math.floor((width - #text) / 2) + 1),
+        y
+    )
+
     term.write(text)
 end
 
-local function screen(title, message)
-    clear()
+local function draw(title, status)
+    term.setBackgroundColor(colors.white)
+    term.setTextColor(colors.black)
+    term.clear()
 
     local _, height = term.getSize()
 
-    center(title, math.floor(height / 2) - 1)
-    center(message, math.floor(height / 2) + 1)
+    center(title, math.floor(height / 2) - 2)
+    center(status, math.floor(height / 2) + 1)
 end
 
-local function progress(current, total)
-    local width, height = term.getSize()
-
-    local barWidth = math.min(width - 10, 30)
-    local filled = math.floor(barWidth * current / total)
-
-    local bar = string.rep("#", filled) .. string.rep("-", barWidth - filled)
-
-    term.setCursorPos(math.floor((width - barWidth) / 2) + 1, height - 3)
-    term.write("[" .. bar .. "]")
-
-    center(tostring(current) .. " / " .. tostring(total), height - 1)
+local function fail(message)
+    draw("INSTALLATION FAILED", message)
+    sleep(4)
+    return false
 end
 
-local function download(url)
-    local response = http.get(url)
+term.setBackgroundColor(colors.white)
+term.setTextColor(colors.black)
+term.clear()
 
-    if not response then
-        return nil
+local _, height = term.getSize()
+
+center("SYSTEM INSTALLER", math.floor(height / 2) - 4)
+center("Creeper Missile Placement System", math.floor(height / 2) - 2)
+center("Initializing...", math.floor(height / 2) + 1)
+
+sleep(1)
+
+if not http then
+    fail("HTTP API unavailable")
+    return
+end
+
+for i, file in ipairs(FILES) do
+    draw(
+        "SYSTEM INSTALLER",
+        "Downloading " .. file.remote .. "  [" .. i .. "/" .. #FILES .. "]"
+    )
+
+    local success, response = pcall(
+        http.get,
+        getUrl(file.remote)
+    )
+
+    if not success or not response then
+        fail("Unable to download " .. file.remote)
+        return
     end
 
     local content = response.readAll()
     response.close()
 
-    if not content or #content == 0 then
-        return nil
+    if not content or content == "" then
+        fail("Empty file: " .. file.remote)
+        return
     end
 
-    return content
-end
+    local handle = fs.open(file.localPath, "w")
 
-local function writeFile(path, content)
-    local file = fs.open(path, "w")
-
-    if not file then
-        return false
+    if not handle then
+        fail("Unable to write " .. file.localPath)
+        return
     end
 
-    file.write(content)
-    file.close()
+    handle.write(content)
+    handle.close()
 
-    return true
+    sleep(0.25)
 end
 
-local function isCommandComputer()
-    return type(commands) == "table"
-        and type(commands.exec) == "function"
-end
-
-local function fail(message)
-    clear()
-
-    local _, height = term.getSize()
-
-    center("INSTALLATION FAILED", math.floor(height / 2) - 2)
-    center(message, math.floor(height / 2))
-    center("Press any key to restart.", math.floor(height / 2) + 2)
-
-    os.pullEvent("key")
-
-    os.reboot()
-end
-
-clear()
-
-if not isCommandComputer() then
-    fail("Command Computer required.")
-end
-
-if not http then
-    fail("HTTP API is disabled.")
-end
-
-local testURL = "https://raw.githubusercontent.com"
-
-local ok = pcall(function()
-    return http.checkURL(testURL)
-end)
-
-if not ok then
-    fail("GitHub access is unavailable.")
-end
-
-if REPOSITORY == "YOUR_GITHUB_USERNAME/YOUR_REPOSITORY" then
-    fail("GitHub repository is not configured.")
-end
-
-screen("SYSTEM INSTALLER", "Preparing installation...")
-sleep(1)
-
-local downloaded = {}
-
-for i, file in ipairs(files) do
-    clear()
-
-    local _, height = term.getSize()
-
-    center("SYSTEM INSTALLER", 3)
-    center("Downloading system files", 5)
-    center(file.remote, 7)
-
-    local url =
-        "https://raw.githubusercontent.com/"
-        .. REPOSITORY
-        .. "/"
-        .. BRANCH
-        .. "/"
-        .. file.remote
-
-    local content = download(url)
-
-    if not content then
-        fail("Download failed: " .. file.remote)
-    end
-
-    downloaded[i] = {
-        path = file.localPath,
-        content = content
-    }
-
-    progress(i, #files)
-
-    sleep(0.4)
-end
-
-clear()
-
-center("SYSTEM INSTALLER", 3)
-center("Installing components", 5)
-
-for _, file in ipairs(downloaded) do
-    local temporary = file.path .. ".install"
-
-    if not writeFile(temporary, file.content) then
-        fail("Write failed.")
-    end
-end
-
-for _, file in ipairs(downloaded) do
-    local temporary = file.path .. ".install"
-
-    if fs.exists(file.path) then
-        fs.delete(file.path)
-    end
-
-    fs.move(temporary, file.path)
-end
-
-clear()
-
-center("INSTALLATION COMPLETE", 8)
-center("Restarting system...", 10)
+draw(
+    "INSTALLATION COMPLETE",
+    "System files installed successfully"
+)
 
 sleep(2)
 
 if fs.exists("/installer.lua") then
     fs.delete("/installer.lua")
 end
+
+draw(
+    "SYSTEM READY",
+    "Rebooting..."
+)
+
+sleep(2)
 
 os.reboot()
