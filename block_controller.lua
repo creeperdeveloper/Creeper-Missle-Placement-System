@@ -1,145 +1,218 @@
-local config = dofile("/config.lua")
+local c=dofile("/config.lua")
 
-local sides = {
-    "left",
-    "right",
-    "front",
-    "back",
-    "top",
-    "bottom"
-}
+local s={"left","right","front","back","top","bottom"}
 
-local function clear()
+local b="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+local function d(x)
+    x=x:gsub("[^"..b.."=]","")
+    local r={}
+    for i=1,#x,4 do
+        local a=b:find(x:sub(i,i),1,true)
+        local z=b:find(x:sub(i+1,i+1),1,true)
+        local q=b:find(x:sub(i+2,i+2),1,true)
+        local w=b:find(x:sub(i+3,i+3),1,true)
+
+        if a and z then
+            local n=(a-1)*262144+(z-1)*4096
+            if q then n=n+(q-1)*64 end
+            if w then n=n+(w-1) end
+
+            r[#r+1]=string.char(
+                math.floor(n/65536)%256
+            )
+
+            if q then
+                r[#r+1]=string.char(
+                    math.floor(n/256)%256
+                )
+            end
+
+            if w then
+                r[#r+1]=string.char(n%256)
+            end
+        end
+    end
+    return table.concat(r)
+end
+
+local function x()
     term.setBackgroundColor(colors.white)
     term.setTextColor(colors.black)
     term.clear()
-    term.setCursorPos(1, 1)
+    term.setCursorPos(1,1)
 end
 
-local function line(y, text)
-    local width = term.getSize()
-
-    term.setCursorPos(1, y)
+local function l(y,t)
+    local w=term.getSize()
+    term.setCursorPos(1,y)
     term.clearLine()
-
-    if #text > width then
-        text = text:sub(1, width)
-    end
-
-    term.write(text)
+    if #t>w then t=t:sub(1,w) end
+    term.write(t)
 end
 
-local function drawHeader()
-    line(1, "CREEPER MISSILE PLACEMENT SYSTEM")
-    line(2, "BLOCK CONTROLLER")
-    line(3, "")
+local function h()
+    l(1,"CREEPER MISSILE PLACEMENT SYSTEM")
+    l(2,"BLOCK CONTROLLER")
+    l(3,"")
 end
 
-local function drawStatus()
-    line(4, "STATUS: RUNNING")
-    line(5, "REDSTONE: WAITING")
-    line(6, "")
-    line(7, "")
-    line(8, "")
-    line(9, "")
+local function ready()
+    x()
+    h()
+    l(4,"STATUS: RUNNING")
+    l(5,"REDSTONE: WAITING")
+    l(6,"")
+    l(7,"")
+    l(8,"")
+    l(9,"")
+    l(10,"")
+    l(11,"Press M for management")
 end
 
-local function showReady()
-    clear()
-    drawHeader()
-    drawStatus()
+local function signal(side,v,block)
+    l(4,"STATUS: RUNNING")
+    l(5,"REDSTONE: "..side)
+    l(6,"SIGNAL: "..tostring(v))
+    l(7,"BLOCK: "..tostring(block))
 end
 
-local function showSignal(side, signal, block)
-    line(4, "STATUS: RUNNING")
-    line(5, "REDSTONE: " .. side)
-    line(6, "SIGNAL: " .. tostring(signal))
-    line(7, "BLOCK: " .. tostring(block))
-end
+local function place(side)
+    local block=c[side]
+    local v=redstone.getAnalogInput(side)
 
-local function showSuccess()
-    line(8, "PLACEMENT: SUCCESS")
-end
+    signal(side,v,block)
 
-local function showFailed(errorMessage)
-    line(8, "PLACEMENT: FAILED")
-    line(9, tostring(errorMessage))
-end
-
-local function showInvalid()
-    line(8, "PLACEMENT: INVALID BLOCK")
-end
-
-local function placeBlock(side)
-    local block = config[side]
-    local signal = redstone.getAnalogInput(side)
-
-    showSignal(side, signal, block)
-
-    if type(block) ~= "string" or block == "" then
-        showInvalid()
+    if type(block)~="string" or block=="" then
+        l(8,"PLACEMENT: INVALID BLOCK")
         return
     end
 
-    if block == "minecraft:air" then
-        line(8, "PLACEMENT: SKIPPED")
+    if block=="minecraft:air" then
+        l(8,"PLACEMENT: SKIPPED")
         return
     end
 
-    local success, result = pcall(
+    local ok,e=pcall(
         commands.setblock,
-        "~",
-        "~-1",
-        "~",
-        block
+        "~","~-1","~",block
     )
 
-    if success then
-        showSuccess()
+    if ok then
+        l(8,"PLACEMENT: SUCCESS")
     else
-        showFailed(result)
+        l(8,"PLACEMENT: FAILED")
+        l(9,tostring(e))
     end
 end
 
-local function stopController()
-    clear()
+local function auth()
+    x()
+    h()
+    l(4,"ADMINISTRATOR AUTHENTICATION")
+    l(6,"PASSWORD:")
+    term.setCursorPos(1,7)
 
-    drawHeader()
-    line(4, "STATUS: STOPPED")
-    line(5, "CONTROLLER TERMINATED")
-    line(7, "Returning to CraftOS...")
+    local p=read("*")
 
-    sleep(1)
+    if p==d(c.admin_password) then
+        return true
+    end
+
+    l(9,"ACCESS DENIED")
+    sleep(2)
+    return false
 end
 
-showReady()
-
-while true do
-    local event = { os.pullEventRaw() }
-
-    if event[1] == "terminate" then
-        stopController()
+local function menu()
+    if not auth() then
+        ready()
         return
     end
 
-    if event[1] == "redstone" then
-        for _, side in ipairs(sides) do
-            local signal = redstone.getAnalogInput(side)
+    while true do
+        x()
+        h()
 
-            if signal > 0 then
-                placeBlock(side)
+        l(4,"ADMINISTRATION")
+        l(6,"[1] RESTART COMPUTER")
+        l(7,"[2] SHUTDOWN COMPUTER")
+        l(8,"[3] EXIT CONTROLLER")
+        l(10,"[ESC] BACK")
 
-                while redstone.getAnalogInput(side) > 0 do
-                    local waitEvent = { os.pullEventRaw() }
+        local e,k=os.pullEventRaw()
 
-                    if waitEvent[1] == "terminate" then
-                        stopController()
-                        return
-                    end
-                end
+        if e=="terminate" then
+            return
+        end
 
-                showReady()
+        if e=="key" then
+            if k==keys.one then
+                x()
+                print("RESTARTING COMPUTER...")
+                sleep(1)
+                os.reboot()
+                return
+
+            elseif k==keys.two then
+                x()
+                print("SHUTTING DOWN COMPUTER...")
+                sleep(1)
+                os.shutdown()
+                return
+
+            elseif k==keys.three then
+                x()
+                h()
+                l(4,"STATUS: STOPPED")
+                l(5,"CONTROLLER TERMINATED")
+                l(7,"Returning to CraftOS...")
+                sleep(1)
+                return "exit"
+
+            elseif k==keys.escape then
+                ready()
+                return
             end
         end
+    end
+end
+
+local function terminate()
+    x()
+    h()
+    l(4,"TERMINATION REQUEST")
+    l(5,"ADMINISTRATOR PASSWORD REQUIRED")
+    l(7,"PASSWORD:")
+    term.setCursorPos(1,8)
+
+    local p=read("*")
+
+    if p==d(c.admin_password) then
+        x()
+        h()
+        l(4,"STATUS: STOPPED")
+        l(5,"ADMINISTRATOR AUTHORIZED")
+        l(7,"Returning to CraftOS...")
+        sleep(1)
+        return true
+    end
+
+    l(10,"ACCESS DENIED")
+    sleep(2)
+    ready()
+    return false
+end
+
+ready()
+
+while true do
+    local e=os.pullEventRaw()
+
+    if e=="terminate" then
+        terminate()
+
+    elseif e=="key" then
+        local k=select(2,os.pullEventRaw)
     end
 end
