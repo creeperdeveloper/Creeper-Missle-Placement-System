@@ -44,16 +44,12 @@ for _, side in ipairs(sides) do
     previous[side] = redstone.getInput(side)
 end
 
-local function placeBlock(block)
+local function placeBlock(side, block)
     if type(block) ~= "string" then
         return
     end
 
-    if block == "" then
-        return
-    end
-
-    if block == "minecraft:air" then
+    if block == "" or block == "minecraft:air" then
         return
     end
 
@@ -61,9 +57,25 @@ local function placeBlock(block)
         return
     end
 
-    commands.exec(
-        "setblock ~ ~-1 ~ " .. block .. " replace"
-    )
+    local command
+
+    if side == "front" then
+        command = "setblock ^ ^ ^1 " .. block .. " replace"
+    elseif side == "back" then
+        command = "setblock ^ ^ ^-1 " .. block .. " replace"
+    elseif side == "left" then
+        command = "setblock ^-1 ^ ^ " .. block .. " replace"
+    elseif side == "right" then
+        command = "setblock ^1 ^ ^ " .. block .. " replace"
+    elseif side == "top" then
+        command = "setblock ^ ^1 ^ " .. block .. " replace"
+    elseif side == "bottom" then
+        command = "setblock ^ ^-1 ^ " .. block .. " replace"
+    end
+
+    if command then
+        commands.exec(command)
+    end
 end
 
 while true do
@@ -71,7 +83,7 @@ while true do
         local current = redstone.getInput(side)
 
         if current and not previous[side] then
-            placeBlock(config[side])
+            placeBlock(side, config[side])
         end
 
         previous[side] = current
