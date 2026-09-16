@@ -1,19 +1,21 @@
-if commands == nil then
+local function isCommandComputer()
+    return type(commands) == "table"
+        and type(commands.exec) == "function"
+end
+
+local function lockScreen()
     term.setBackgroundColor(colors.white)
     term.setTextColor(colors.black)
     term.clear()
     term.setCursorPos(1, 1)
 
     local width, height = term.getSize()
-
     local message = "SYSTEM LOCKED"
+
     local x = math.floor((width - #message) / 2) + 1
+    local y = math.floor(height / 2)
 
-    term.setCursorPos(
-        x,
-        math.floor(height / 2)
-    )
-
+    term.setCursorPos(x, y)
     term.write(message)
 
     while true do
@@ -21,8 +23,11 @@ if commands == nil then
     end
 end
 
-local config =
-    dofile("/config.lua")
+if not isCommandComputer() then
+    lockScreen()
+end
+
+local config = dofile("/config.lua")
 
 local sides = {
     "left",
@@ -36,44 +41,40 @@ local sides = {
 local previous = {}
 
 for _, side in ipairs(sides) do
-    previous[side] =
-        redstone.getInput(side)
+    previous[side] = redstone.getInput(side)
 end
 
 local function placeBlock(block)
-    if not block
-        or block == ""
-        or block == "minecraft:air"
-    then
+    if type(block) ~= "string" then
         return
     end
 
-    if commands == nil then
+    if block == "" then
+        return
+    end
+
+    if block == "minecraft:air" then
+        return
+    end
+
+    if not isCommandComputer() then
         return
     end
 
     commands.exec(
-        "setblock ~ ~-1 ~ "
-        .. block
-        .. " replace"
+        "setblock ~ ~-1 ~ " .. block .. " replace"
     )
 end
 
 while true do
     for _, side in ipairs(sides) do
-        local current =
-            redstone.getInput(side)
+        local current = redstone.getInput(side)
 
-        if current
-            and not previous[side]
-        then
-            placeBlock(
-                config[side]
-            )
+        if current and not previous[side] then
+            placeBlock(config[side])
         end
 
-        previous[side] =
-            current
+        previous[side] = current
     end
 
     sleep(0.05)
