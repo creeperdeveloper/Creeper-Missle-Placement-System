@@ -46,15 +46,26 @@ for _, side in ipairs(sides) do
     previous[side] = redstone.getInput(side)
 end
 
-local function getComputerFacing()
+local function getComputerData()
     local x, y, z = commands.getBlockPosition()
-    local info = commands.getBlockInfo(x, y, z)
 
-    if not info or not info.state then
+    if not x or not y or not z then
         return nil
     end
 
-    return info.state.facing
+    local info = commands.getBlockInfo(x, y, z)
+
+    if not info then
+        return nil
+    end
+
+    local facing
+
+    if info.state then
+        facing = info.state.facing
+    end
+
+    return x, y, z, facing
 end
 
 local function placeBlock(side)
@@ -72,17 +83,43 @@ local function placeBlock(side)
         return
     end
 
-    local facing = getComputerFacing()
+    local x, y, z, facing = getComputerData()
+
+    if not x or not y or not z then
+        return
+    end
+
+    local targetY = y - 1
+
+    local command
 
     if facing then
-        commands.exec(
-            "setblock ~ ~-1 ~ " .. block .. "[facing=" .. facing .. "] replace"
-        )
+        command =
+            "setblock "
+            .. x
+            .. " "
+            .. targetY
+            .. " "
+            .. z
+            .. " "
+            .. block
+            .. "[facing="
+            .. facing
+            .. "] replace"
     else
-        commands.exec(
-            "setblock ~ ~-1 ~ " .. block .. " replace"
-        )
+        command =
+            "setblock "
+            .. x
+            .. " "
+            .. targetY
+            .. " "
+            .. z
+            .. " "
+            .. block
+            .. " replace"
     end
+
+    commands.exec(command)
 end
 
 while true do
