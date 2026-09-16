@@ -1,8 +1,9 @@
 return {
-    left = "minecraft:tnt",
-    right = "minecraft:stone",
-    front = "minecraft:redstone_block",
-    back = "minecraft:iron_block",
-    top = "minecraft:glass",
-    bottom = "minecraft:air"
+    left="minecraft:tnt",
+    right="minecraft:stone",
+    front="minecraft:redstone_block",
+    back="minecraft:iron_block",
+    top="minecraft:glass",
+    bottom="minecraft:gold_block",
+    admin_password="Q3JlZXBlckFkbWluMTIz"
 }
