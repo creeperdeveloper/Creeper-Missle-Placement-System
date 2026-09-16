@@ -1,134 +1,84 @@
-local REPOSITORY = "creeperdeveloper/Creeper-Missle-Placement-System"
-local BRANCH = "main"
+local R="creeperdeveloper/Creeper-Missle-Placement-System"
+local B="main"
 
-local FILES = {
-    {
-        remote = "startup.lua",
-        localPath = "/startup.lua"
-    },
-    {
-        remote = "block_controller.lua",
-        localPath = "/block_controller.lua"
-    },
-    {
-        remote = "config.lua",
-        localPath = "/config.lua"
-    },
-    {
-        remote = "version.txt",
-        localPath = "/block_controller.version"
-    }
+local F={
+    {"startup.lua","/startup.lua"},
+    {"block_controller.lua","/block_controller.lua"},
+    {"config.lua","/config.lua"},
+    {"version.txt","/block_controller.version"}
 }
 
-local function getUrl(file)
-    return "https://raw.githubusercontent.com/"
-        .. REPOSITORY
-        .. "/"
-        .. BRANCH
-        .. "/"
-        .. file
-        .. "?t="
-        .. tostring(os.epoch("utc"))
+local function u(f)
+    return "https://raw.githubusercontent.com/"..R.."/"..B.."/"..f.."?t="..os.epoch("utc")
 end
 
-local function clear()
+local function c()
     term.setBackgroundColor(colors.white)
     term.setTextColor(colors.black)
     term.clear()
-    term.setCursorPos(1, 1)
+    term.setCursorPos(1,1)
 end
 
-local function center(text, y)
-    local width = term.getSize()
-
-    term.setCursorPos(
-        math.max(1, math.floor((width - #text) / 2) + 1),
-        y
-    )
-
-    term.write(text)
+local function m(t,y)
+    local w=term.getSize()
+    term.setCursorPos(math.max(1,math.floor((w-#t)/2)+1),y)
+    term.write(t)
 end
 
-local function screen(title, status)
-    clear()
-
-    local _, height = term.getSize()
-    local centerY = math.floor(height / 2)
-
-    center(title, centerY - 2)
-    center(status, centerY + 1)
+local function s(a,b)
+    c()
+    local _,h=term.getSize()
+    local y=math.floor(h/2)
+    m(a,y-2)
+    m(b,y+1)
 end
 
-local function fail(message)
-    screen("INSTALLATION FAILED", message)
-    sleep(4)
-end
-
-screen(
-    "SYSTEM INSTALLER",
-    "Initializing..."
-)
-
+s("SYSTEM INSTALLER","Initializing...")
 sleep(1)
 
 if not http then
-    fail("HTTP API unavailable")
+    s("INSTALLATION FAILED","HTTP API unavailable")
+    sleep(4)
     return
 end
 
-for i, file in ipairs(FILES) do
-    screen(
-        "SYSTEM INSTALLER",
-        "Downloading " .. file.remote .. " [" .. i .. "/" .. #FILES .. "]"
-    )
+for i,v in ipairs(F) do
+    s("SYSTEM INSTALLER","Downloading "..v[1].." ["..i.."/"..#F.."]")
 
-    local success, response = pcall(
-        http.get,
-        getUrl(file.remote)
-    )
+    local ok,r=pcall(http.get,u(v[1]))
 
-    if not success or not response then
-        fail("Unable to download " .. file.remote)
+    if not ok or not r then
+        s("INSTALLATION FAILED","Unable to download "..v[1])
+        sleep(4)
         return
     end
 
-    local content = response.readAll()
-    response.close()
+    local z=r.readAll()
+    r.close()
 
-    if not content or content == "" then
-        fail("Empty file: " .. file.remote)
+    if not z or z=="" then
+        s("INSTALLATION FAILED","Empty file: "..v[1])
+        sleep(4)
         return
     end
 
-    local handle = fs.open(file.localPath, "w")
+    local h=fs.open(v[2],"w")
 
-    if not handle then
-        fail("Unable to write " .. file.localPath)
+    if not h then
+        s("INSTALLATION FAILED","Unable to write "..v[2])
+        sleep(4)
         return
     end
 
-    handle.write(content)
-    handle.close()
-
-    sleep(0.25)
+    h.write(z)
+    h.close()
+    sleep(.25)
 end
-
-screen(
-    "INSTALLATION COMPLETE",
-    "System files installed"
-)
-
-sleep(2)
 
 if fs.exists("/installer.lua") then
     fs.delete("/installer.lua")
 end
 
-screen(
-    "SYSTEM READY",
-    "Rebooting..."
-)
-
+s("INSTALLATION COMPLETE","Rebooting...")
 sleep(2)
-
 os.reboot()
