@@ -1,4 +1,4 @@
-local REPOSITORY = "creeperdeveloper/Creeper-Missle-Placement-Systesssm"
+local REPOSITORY = "creeperdeveloper/Creeper-Missle-Placement-System"
 local BRANCH = "main"
 
 local LOCAL_VERSION = "/block_controller.version"
