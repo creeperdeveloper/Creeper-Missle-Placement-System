@@ -22,17 +22,6 @@ local FILES = {
     }
 }
 
-local function getUrl(file)
-    return "https://raw.githubusercontent.com/"
-        .. REPOSITORY
-        .. "/"
-        .. BRANCH
-        .. "/"
-        .. file
-        .. "?t="
-        .. tostring(os.epoch("utc"))
-end
-
 local function center(text, y)
     local width = term.getSize()
 
@@ -51,10 +40,7 @@ local function lockedScreen(message)
 
     local _, height = term.getSize()
 
-    center(
-        message,
-        math.floor(height / 2)
-    )
+    center(message, math.floor(height / 2))
 
     while true do
         os.pullEventRaw()
@@ -72,6 +58,17 @@ local function systemScreen(title, status)
     center(status, math.floor(height / 2) + 1)
 end
 
+local function getUrl(file)
+    return "https://raw.githubusercontent.com/"
+        .. REPOSITORY
+        .. "/"
+        .. BRANCH
+        .. "/"
+        .. file
+        .. "?t="
+        .. tostring(os.epoch("utc"))
+end
+
 local function readLocalVersion()
     if not fs.exists(VERSION_FILE) then
         return nil
@@ -85,6 +82,33 @@ local function readLocalVersion()
 
     local version = handle.readAll()
     handle.close()
+
+    if not version then
+        return nil
+    end
+
+    version = version:gsub("^%s+", "")
+    version = version:gsub("%s+$", "")
+
+    if version == "" then
+        return nil
+    end
+
+    return version
+end
+
+local function getRemoteVersion()
+    local success, response = pcall(
+        http.get,
+        getUrl("version.txt")
+    )
+
+    if not success or not response then
+        return nil
+    end
+
+    local version = response.readAll()
+    response.close()
 
     if not version then
         return nil
@@ -129,29 +153,6 @@ local function download(file)
     return true
 end
 
-local function getRemoteVersion()
-    local success, response = pcall(
-        http.get,
-        getUrl("version.txt")
-    )
-
-    if not success or not response then
-        return nil
-    end
-
-    local version = response.readAll()
-    response.close()
-
-    if not version then
-        return nil
-    end
-
-    version = version:gsub("^%s+", "")
-    version = version:gsub("%s+$", "")
-
-    return version
-end
-
 local function updateSystem(remoteVersion)
     for i, file in ipairs(FILES) do
         systemScreen(
@@ -188,22 +189,62 @@ if type(commands) ~= "table"
     lockedScreen("SYSTEM LOCKED")
 end
 
+if not fs.exists("/config.lua") then
+    lockedScreen("CONFIG NOT FOUND")
+end
+
 if not fs.exists("/block_controller.lua") then
     lockedScreen("CONTROLLER NOT FOUND")
 end
 
-if not http then
-    dofile("/block_controller.lua")
-    return
+if http then
+    local localVersion = readLocalVersion()
+    local remoteVersion = getRemoteVersion()
+
+    if remoteVersion
+        and remoteVersion ~= localVersion then
+
+        updateSystem(remoteVersion)
+    end
 end
 
-local localVersion = readLocalVersion()
-local remoteVersion = getRemoteVersion()
+local config = dofile("/config.lua")
 
-if remoteVersion
-    and remoteVersion ~= localVersion then
+local sides = {
+    "left",
+    "right",
+    "front",
+    "back",
+    "top",
+    "bottom"
+}
 
-    updateSystem(remoteVersion)
+term.setBackgroundColor(colors.white)
+term.setTextColor(colors.black)
+term.clear()
+
+while true do
+    for _, side in ipairs(sides) do
+        if redstone.getAnalogInput(side) > 0 then
+            local block = config[side]
+
+            if type(block) == "string"
+                and block ~= ""
+                and block ~= "minecraft:air" then
+
+                commands.setblock(
+                    "~",
+                    "~-1",
+                    "~",
+                    block
+                )
+
+                while redstone.getAnalogInput(side) > 0 do
+                    sleep(0.05)
+                end
+            end
+        end
+    end
+
+    sleep(0.05)
 end
-
-dofile("/block_controller.lua")
