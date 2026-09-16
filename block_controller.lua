@@ -1,4 +1,28 @@
-local config = dofile("/config.lua")
+if commands == nil then
+    term.setBackgroundColor(colors.white)
+    term.setTextColor(colors.black)
+    term.clear()
+    term.setCursorPos(1, 1)
+
+    local width, height = term.getSize()
+
+    local message = "SYSTEM LOCKED"
+    local x = math.floor((width - #message) / 2) + 1
+
+    term.setCursorPos(
+        x,
+        math.floor(height / 2)
+    )
+
+    term.write(message)
+
+    while true do
+        os.pullEventRaw()
+    end
+end
+
+local config =
+    dofile("/config.lua")
 
 local sides = {
     "left",
@@ -12,33 +36,11 @@ local sides = {
 local previous = {}
 
 for _, side in ipairs(sides) do
-    previous[side] = redstone.getInput(side)
+    previous[side] =
+        redstone.getInput(side)
 end
 
-local function draw()
-    term.clear()
-    term.setCursorPos(1, 1)
-
-    print("BLOCK CONTROLLER")
-    print("----------------")
-    print("SYSTEM: LOCKED")
-    print("STATUS: RUNNING")
-    print()
-
-    for _, side in ipairs(sides) do
-        local state = redstone.getInput(side)
-        local block = config[side] or "minecraft:air"
-
-        if state then
-            print(string.upper(side) .. ": ON")
-            print("  -> " .. block)
-        else
-            print(string.upper(side) .. ": OFF")
-        end
-    end
-end
-
-local function place(block)
+local function placeBlock(block)
     if not block
         or block == ""
         or block == "minecraft:air"
@@ -46,40 +48,33 @@ local function place(block)
         return
     end
 
-    local ok, result = commands.exec(
-        "setblock ~ ~-1 ~ " ..
-        block ..
-        " replace"
-    )
-
-    if not ok then
-        term.clear()
-        term.setCursorPos(1, 1)
-
-        print("SETBLOCK ERROR")
-        print()
-        print(tostring(result))
-
-        sleep(2)
+    if commands == nil then
+        return
     end
+
+    commands.exec(
+        "setblock ~ ~-1 ~ "
+        .. block
+        .. " replace"
+    )
 end
 
-local function processRedstone()
+while true do
     for _, side in ipairs(sides) do
         local current =
             redstone.getInput(side)
 
-        if current and not previous[side] then
-            place(config[side])
+        if current
+            and not previous[side]
+        then
+            placeBlock(
+                config[side]
+            )
         end
 
-        previous[side] = current
+        previous[side] =
+            current
     end
-end
-
-while true do
-    processRedstone()
-    draw()
 
     sleep(0.05)
 end
