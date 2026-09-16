@@ -91,6 +91,8 @@ local function readFile(path)
 end
 
 local function download(remote)
+    local cacheBuster = tostring(os.epoch("utc"))
+
     local url =
         "https://raw.githubusercontent.com/"
         .. REPOSITORY
@@ -98,6 +100,8 @@ local function download(remote)
         .. BRANCH
         .. "/"
         .. remote
+        .. "?v="
+        .. cacheBuster
 
     local response = http.get(url)
 
@@ -133,8 +137,15 @@ local function update()
 
     local _, height = term.getSize()
 
-    center("UPDATE REQUIRED", math.floor(height / 2) - 2)
-    center("Downloading latest system...", math.floor(height / 2))
+    center(
+        "UPDATE REQUIRED",
+        math.floor(height / 2) - 2
+    )
+
+    center(
+        "Downloading latest system...",
+        math.floor(height / 2)
+    )
 
     sleep(1)
 
@@ -160,18 +171,27 @@ local function update()
 
     clear()
 
-    center("UPDATE REQUIRED", math.floor(height / 2) - 2)
-    center("Installing update...", math.floor(height / 2))
+    center(
+        "UPDATE REQUIRED",
+        math.floor(height / 2) - 2
+    )
+
+    center(
+        "Installing update...",
+        math.floor(height / 2)
+    )
+
+    sleep(1)
 
     for _, file in ipairs(downloaded) do
         local temporary = file.path .. ".update"
 
         if not writeFile(temporary, file.content) then
-            for _, rollback in ipairs(downloaded) do
-                local rollbackPath = rollback.path .. ".update"
+            for _, cleanup in ipairs(downloaded) do
+                local cleanupPath = cleanup.path .. ".update"
 
-                if fs.exists(rollbackPath) then
-                    fs.delete(rollbackPath)
+                if fs.exists(cleanupPath) then
+                    fs.delete(cleanupPath)
                 end
             end
 
@@ -196,8 +216,15 @@ local function update()
 
     clear()
 
-    center("UPDATE COMPLETE", math.floor(height / 2) - 2)
-    center("Restarting system...", math.floor(height / 2))
+    center(
+        "UPDATE COMPLETE",
+        math.floor(height / 2) - 2
+    )
+
+    center(
+        "Restarting system...",
+        math.floor(height / 2)
+    )
 
     sleep(2)
 
@@ -237,10 +264,37 @@ local function runController()
     end
 end
 
+local function checkForUpdate()
+    local localVersion = readFile(LOCAL_VERSION)
+
+    local remoteContent = download("version.txt")
+
+    if not remoteContent then
+        return false, "GitHub version unavailable"
+    end
+
+    local remoteVersion = remoteContent:gsub("%s+", "")
+
+    if not localVersion then
+        return true, remoteVersion
+    end
+
+    if localVersion ~= remoteVersion then
+        return true, remoteVersion
+    end
+
+    return false, remoteVersion
+end
+
 local function main()
     locked()
 
     if not isCommandComputer() then
+        errorScreen(
+            "SYSTEM LOCKED",
+            "Command Computer required."
+        )
+
         return
     end
 
@@ -249,21 +303,17 @@ local function main()
         return
     end
 
-    local remoteVersion
+    local success, needsUpdateOrError, remoteVersion =
+        pcall(checkForUpdate)
 
-    local versionOK = pcall(function()
-        remoteVersion = download("version.txt")
-    end)
+    if not success then
+        runController()
+        return
+    end
 
-    if versionOK and remoteVersion then
-        remoteVersion = remoteVersion:gsub("%s+", "")
-
-        local localVersion = readFile(LOCAL_VERSION)
-
-        if localVersion ~= remoteVersion then
-            update()
-            return
-        end
+    if needsUpdateOrError == true then
+        update()
+        return
     end
 
     runController()
