@@ -42,7 +42,7 @@ local function center(text, y)
     term.write(text)
 end
 
-local function draw(title, status)
+local function screen(title, status)
     term.setBackgroundColor(colors.white)
     term.setTextColor(colors.black)
     term.clear()
@@ -54,9 +54,8 @@ local function draw(title, status)
 end
 
 local function fail(message)
-    draw("INSTALLATION FAILED", message)
+    screen("INSTALLATION FAILED", message)
     sleep(4)
-    return false
 end
 
 term.setBackgroundColor(colors.white)
@@ -77,7 +76,7 @@ if not http then
 end
 
 for i, file in ipairs(FILES) do
-    draw(
+    screen(
         "SYSTEM INSTALLER",
         "Downloading " .. file.remote .. "  [" .. i .. "/" .. #FILES .. "]"
     )
@@ -113,7 +112,7 @@ for i, file in ipairs(FILES) do
     sleep(0.25)
 end
 
-draw(
+screen(
     "INSTALLATION COMPLETE",
     "System files installed successfully"
 )
@@ -124,7 +123,7 @@ if fs.exists("/installer.lua") then
     fs.delete("/installer.lua")
 end
 
-draw(
+screen(
     "SYSTEM READY",
     "Rebooting..."
 )
