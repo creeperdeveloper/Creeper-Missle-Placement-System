@@ -1,7 +1,6 @@
 local c=dofile("/config.lua")
 
 local s={"left","right","front","back","top","bottom"}
-
 local b="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
 local function d(x)
@@ -18,14 +17,10 @@ local function d(x)
             if q then n=n+(q-1)*64 end
             if w then n=n+(w-1) end
 
-            r[#r+1]=string.char(
-                math.floor(n/65536)%256
-            )
+            r[#r+1]=string.char(math.floor(n/65536)%256)
 
             if q then
-                r[#r+1]=string.char(
-                    math.floor(n/256)%256
-                )
+                r[#r+1]=string.char(math.floor(n/256)%256)
             end
 
             if w then
@@ -62,26 +57,17 @@ local function ready()
     h()
     l(4,"STATUS: RUNNING")
     l(5,"REDSTONE: WAITING")
-    l(6,"")
-    l(7,"")
-    l(8,"")
-    l(9,"")
-    l(10,"")
     l(11,"Press M for management")
 end
 
-local function signal(side,v,block)
+local function place(q)
+    local block=c[q]
+    local v=redstone.getAnalogInput(q)
+
     l(4,"STATUS: RUNNING")
-    l(5,"REDSTONE: "..side)
-    l(6,"SIGNAL: "..tostring(v))
+    l(5,"REDSTONE: "..q)
+    l(6,"SIGNAL: "..v)
     l(7,"BLOCK: "..tostring(block))
-end
-
-local function place(side)
-    local block=c[side]
-    local v=redstone.getAnalogInput(side)
-
-    signal(side,v,block)
 
     if type(block)~="string" or block=="" then
         l(8,"PLACEMENT: INVALID BLOCK")
@@ -93,10 +79,7 @@ local function place(side)
         return
     end
 
-    local ok,e=pcall(
-        commands.setblock,
-        "~","~-1","~",block
-    )
+    local ok,e=pcall(commands.setblock,"~","~-1","~",block)
 
     if ok then
         l(8,"PLACEMENT: SUCCESS")
@@ -113,19 +96,13 @@ local function auth()
     l(6,"PASSWORD:")
     term.setCursorPos(1,7)
 
-    local p=read("*")
-
-    if p==d(c.admin_password) then
-        return true
-    end
-
-    l(9,"ACCESS DENIED")
-    sleep(2)
-    return false
+    return read("*")==d(c.admin_password)
 end
 
 local function menu()
     if not auth() then
+        l(9,"ACCESS DENIED")
+        sleep(2)
         ready()
         return
     end
@@ -133,7 +110,6 @@ local function menu()
     while true do
         x()
         h()
-
         l(4,"ADMINISTRATION")
         l(6,"[1] RESTART COMPUTER")
         l(7,"[2] SHUTDOWN COMPUTER")
@@ -141,10 +117,6 @@ local function menu()
         l(10,"[ESC] BACK")
 
         local e,k=os.pullEventRaw()
-
-        if e=="terminate" then
-            return
-        end
 
         if e=="key" then
             if k==keys.one then
@@ -186,9 +158,7 @@ local function terminate()
     l(7,"PASSWORD:")
     term.setCursorPos(1,8)
 
-    local p=read("*")
-
-    if p==d(c.admin_password) then
+    if read("*")==d(c.admin_password) then
         x()
         h()
         l(4,"STATUS: STOPPED")
@@ -207,12 +177,35 @@ end
 ready()
 
 while true do
-    local e=os.pullEventRaw()
+    local e,a=os.pullEventRaw()
 
     if e=="terminate" then
         terminate()
 
-    elseif e=="key" then
-        local k=select(2,os.pullEventRaw)
+    elseif e=="key" and a==keys.m then
+        if menu()=="exit" then
+            return
+        end
+
+    elseif e=="redstone" then
+        for _,q in ipairs(s) do
+            if redstone.getAnalogInput(q)>0 then
+                place(q)
+
+                while redstone.getAnalogInput(q)>0 do
+                    local e2,a2=os.pullEventRaw()
+
+                    if e2=="terminate" then
+                        terminate()
+                    elseif e2=="key" and a2==keys.m then
+                        if menu()=="exit" then
+                            return
+                        end
+                    end
+                end
+
+                ready()
+            end
+        end
     end
 end
