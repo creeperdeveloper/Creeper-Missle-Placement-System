@@ -1,8 +1,3 @@
-local function isCommandComputer()
-    return type(commands) == "table"
-        and type(commands.exec) == "function"
-end
-
 local function lockScreen()
     term.setBackgroundColor(colors.white)
     term.setTextColor(colors.black)
@@ -12,10 +7,11 @@ local function lockScreen()
     local width, height = term.getSize()
     local message = "SYSTEM LOCKED"
 
-    local x = math.floor((width - #message) / 2) + 1
-    local y = math.floor(height / 2)
+    term.setCursorPos(
+        math.floor((width - #message) / 2) + 1,
+        math.floor(height / 2)
+    )
 
-    term.setCursorPos(x, y)
     term.write(message)
 
     while true do
@@ -23,31 +19,50 @@ local function lockScreen()
     end
 end
 
-local function errorScreen(message)
+local function showError(title, message)
     term.setBackgroundColor(colors.white)
-    term.setTextColor(colors.red)
+    term.setTextColor(colors.black)
     term.clear()
-    term.setCursorPos(1, 1)
 
     local width, height = term.getSize()
 
-    local title = "SYSTEM ERROR"
+    term.setCursorPos(
+        math.max(1, math.floor((width - #title) / 2) + 1),
+        math.floor(height / 2) - 3
+    )
 
-    local x1 = math.floor((width - #title) / 2) + 1
-    local x2 = math.floor((width - #message) / 2) + 1
-
-    term.setCursorPos(x1, math.floor(height / 2) - 1)
     term.write(title)
 
-    term.setCursorPos(x2, math.floor(height / 2) + 1)
-    term.write(message)
+    local lines = {}
 
-    while true do
-        os.pullEventRaw()
+    for line in tostring(message):gmatch("[^\n]+") do
+        lines[#lines + 1] = line
     end
+
+    for i, line in ipairs(lines) do
+        local y = math.floor(height / 2) - 1 + i
+
+        if y > height then
+            break
+        end
+
+        term.setCursorPos(
+            math.max(1, math.floor((width - #line) / 2) + 1),
+            y
+        )
+
+        term.write(line)
+    end
+
+    term.setCursorPos(1, height)
+    term.write("Press any key to restart.")
+
+    os.pullEvent("key")
+    os.reboot()
 end
 
-if not isCommandComputer() then
+if type(commands) ~= "table"
+    or type(commands.exec) ~= "function" then
     lockScreen()
 end
 
@@ -62,64 +77,85 @@ local sides = {
     "bottom"
 }
 
-local function placeBlock(side)
-    local block = config[side]
-
-    if type(block) ~= "string" then
-        return
-    end
-
-    if block == "" or block == "minecraft:air" then
-        return
-    end
-
-    if not isCommandComputer() then
-        return
-    end
-
+local function executeSetblock(block)
     local command =
         "setblock ~ ~-1 ~ "
         .. block
         .. " replace"
 
-    local ok, output = pcall(function()
-        return commands.exec(command)
-    end)
+    local ok, output, affected = commands.exec(command)
 
-    if not ok then
-        errorScreen(tostring(output))
-        return
+    return ok, output, affected, command
+end
+
+local function placeBlock(side)
+    local block = config[side]
+
+    if type(block) ~= "string"
+        or block == ""
+        or block == "minecraft:air" then
+        return true
     end
 
-    if output == false then
-        local success, lines = commands.exec(command)
+    local ok, output, affected, command =
+        executeSetblock(block)
 
-        if not success then
-            local message = "SETBLOCK FAILED"
+    if ok then
+        return true
+    end
 
-            if type(lines) == "table" and #lines > 0 then
-                message = tostring(lines[1])
-            end
+    local message = {
+        "SIDE: " .. side,
+        "BLOCK: " .. block,
+        "COMMAND:",
+        command,
+        "",
+        "COMMAND FAILED"
+    }
 
-            errorScreen(message)
+    if type(affected) == "number" then
+        message[#message + 1] =
+            "AFFECTED: " .. tostring(affected)
+    end
+
+    if type(output) == "table" then
+        for _, line in ipairs(output) do
+            message[#message + 1] = tostring(line)
         end
+    elseif output ~= nil then
+        message[#message + 1] = tostring(output)
     end
+
+    showError(
+        "BLOCK CONTROLLER ERROR",
+        table.concat(message, "\n")
+    )
+
+    return false
+end
+
+local previous = {}
+
+for _, side in ipairs(sides) do
+    previous[side] = redstone.getInput(side)
 end
 
 for _, side in ipairs(sides) do
-    if redstone.getInput(side) then
+    if previous[side] then
         placeBlock(side)
     end
 end
 
 while true do
-    local event = { os.pullEvent() }
+    os.pullEvent("redstone")
 
-    if event[1] == "redstone" then
-        for _, side in ipairs(sides) do
-            if redstone.getInput(side) then
-                placeBlock(side)
-            end
+    for _, side in ipairs(sides) do
+        local current = redstone.getInput(side)
+
+        if current and not previous[side] then
+            placeBlock(side)
         end
+
+        previous[side] = current
     end
 end
