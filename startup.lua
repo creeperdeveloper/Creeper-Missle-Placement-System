@@ -1,30 +1,20 @@
 term.setBackgroundColor(colors.black)
 term.setTextColor(colors.white)
 term.clear()
-term.setCursorPos(1, 1)
-
-print("CREEPER MISSILE PLACEMENT SYSTEM")
-print("")
-print("Starting controller...")
-print("")
+term.setCursorPos(1,1)
 
 if not fs.exists("/block_controller.lua") then
-    print("ERROR: block_controller.lua not found")
+    print("CONTROLLER NOT FOUND")
     return
 end
 
-local environment = setmetatable({}, {
-    __index = _ENV
+local e=setmetatable({},{
+    __index=_ENV
 })
 
-local success, errorMessage = os.run(
-    environment,
-    "/block_controller.lua"
-)
+local ok,err=os.run(e,"/block_controller.lua")
 
-if not success then
-    print("")
-    print("CONTROLLER STOPPED")
-    print("")
-    print(tostring(errorMessage))
+if not ok then
+    print("CONTROLLER ERROR")
+    print(tostring(err))
 end
