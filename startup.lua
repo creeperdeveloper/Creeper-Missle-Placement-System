@@ -33,6 +33,13 @@ local function getUrl(file)
         .. tostring(os.epoch("utc"))
 end
 
+local function clear()
+    term.setBackgroundColor(colors.white)
+    term.setTextColor(colors.black)
+    term.clear()
+    term.setCursorPos(1, 1)
+end
+
 local function center(text, y)
     local width = term.getSize()
 
@@ -45,14 +52,13 @@ local function center(text, y)
 end
 
 local function screen(title, status)
-    term.setBackgroundColor(colors.white)
-    term.setTextColor(colors.black)
-    term.clear()
+    clear()
 
     local _, height = term.getSize()
+    local centerY = math.floor(height / 2)
 
-    center(title, math.floor(height / 2) - 2)
-    center(status, math.floor(height / 2) + 1)
+    center(title, centerY - 2)
+    center(status, centerY + 1)
 end
 
 local function readLocalVersion()
@@ -84,6 +90,10 @@ local function readLocalVersion()
 end
 
 local function getRemoteVersion()
+    if not http then
+        return nil
+    end
+
     local success, response = pcall(
         http.get,
         getUrl("version.txt")
@@ -143,7 +153,7 @@ local function updateSystem(remoteVersion)
     for i, file in ipairs(FILES) do
         screen(
             "SYSTEM UPDATE",
-            "Downloading " .. file.remote .. "  [" .. i .. "/" .. #FILES .. "]"
+            "Downloading " .. file.remote .. " [" .. i .. "/" .. #FILES .. "]"
         )
 
         if not download(file) then
@@ -156,12 +166,12 @@ local function updateSystem(remoteVersion)
             return false
         end
 
-        sleep(0.25)
+        sleep(0.2)
     end
 
     screen(
         "UPDATE COMPLETE",
-        "Installed version " .. remoteVersion
+        "Version " .. remoteVersion
     )
 
     sleep(2)
@@ -171,36 +181,52 @@ local function updateSystem(remoteVersion)
     return true
 end
 
-term.setBackgroundColor(colors.white)
-term.setTextColor(colors.black)
-term.clear()
+clear()
 
-if type(commands) ~= "table"
-    or type(commands.setblock) ~= "function" then
+screen(
+    "CREEPER MISSILE PLACEMENT SYSTEM",
+    "Starting..."
+)
 
-    center(
-        "SYSTEM LOCKED",
-        math.floor(term.getSize() / 2)
+sleep(1)
+
+if type(commands) ~= "table" then
+    screen(
+        "SYSTEM ERROR",
+        "Command Computer required"
     )
 
+    sleep(4)
+    return
+end
+
+if type(commands.setblock) ~= "function" then
+    screen(
+        "SYSTEM ERROR",
+        "commands.setblock unavailable"
+    )
+
+    sleep(4)
     return
 end
 
 if not fs.exists("/block_controller.lua") then
-    center(
-        "CONTROLLER NOT FOUND",
-        math.floor(term.getSize() / 2)
+    screen(
+        "SYSTEM ERROR",
+        "block_controller.lua not found"
     )
 
+    sleep(4)
     return
 end
 
 if not fs.exists("/config.lua") then
-    center(
-        "CONFIG NOT FOUND",
-        math.floor(term.getSize() / 2)
+    screen(
+        "SYSTEM ERROR",
+        "config.lua not found"
     )
 
+    sleep(4)
     return
 end
 
@@ -208,16 +234,32 @@ if http then
     local localVersion = readLocalVersion()
     local remoteVersion = getRemoteVersion()
 
-    if remoteVersion
-        and remoteVersion ~= localVersion then
+    if remoteVersion and remoteVersion ~= localVersion then
+        if not updateSystem(remoteVersion) then
+            return
+        end
 
-        updateSystem(remoteVersion)
         return
     end
 end
 
-term.setBackgroundColor(colors.white)
-term.setTextColor(colors.black)
-term.clear()
+screen(
+    "CREEPER MISSILE PLACEMENT SYSTEM",
+    "Starting controller..."
+)
 
-shell.run("/block_controller.lua")
+sleep(1)
+
+local success, result = pcall(
+    shell.run,
+    "/block_controller.lua"
+)
+
+if not success then
+    screen(
+        "CONTROLLER ERROR",
+        tostring(result)
+    )
+
+    sleep(5)
+end
