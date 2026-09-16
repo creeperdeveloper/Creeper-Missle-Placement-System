@@ -5,5 +5,5 @@ return {
     back="minecraft:iron_block",
     top="minecraft:glass",
     bottom="minecraft:gold_block",
-    admin_password="Q3JlZXBlckFkbWluMTIz"
+    admin_password="Y3JlZXBlcg=="
 }
