@@ -2,8 +2,24 @@ local REPOSITORY = "creeperdeveloper/Creeper-Missle-Placement-System"
 
 local BRANCH = "main"
 
-local CURRENT_VERSION_FILE =
-    "/block_controller.version"
+local files = {
+    {
+        remote = "startup.lua",
+        localPath = "/startup.lua"
+    },
+    {
+        remote = "block_controller.lua",
+        localPath = "/block_controller.lua"
+    },
+    {
+        remote = "config.lua",
+        localPath = "/config.lua"
+    },
+    {
+        remote = "version.txt",
+        localPath = "/block_controller.version"
+    }
+}
 
 local function clear()
     term.setBackgroundColor(colors.white)
@@ -13,132 +29,55 @@ local function clear()
 end
 
 local function center(text, y)
-    local width, height = term.getSize()
-
-    local x =
-        math.floor((width - #text) / 2) + 1
+    local width = term.getSize()
+    local x = math.floor((width - #text) / 2) + 1
 
     term.setCursorPos(x, y)
     term.write(text)
 end
 
-local function lockedScreen()
+local function screen(title, message)
     clear()
 
     local _, height = term.getSize()
 
-    center(
-        "SYSTEM LOCKED",
-        math.floor(height / 2)
-    )
+    center(title, math.floor(height / 2) - 1)
+    center(message, math.floor(height / 2) + 1)
 end
 
-local function messageScreen(title, message)
-    clear()
+local function progress(current, total)
+    local width, height = term.getSize()
 
-    local _, height = term.getSize()
+    local barWidth = math.min(width - 10, 30)
+    local filled = math.floor(barWidth * current / total)
 
-    center(
-        title,
-        math.floor(height / 2) - 2
-    )
+    local bar = string.rep("#", filled) .. string.rep("-", barWidth - filled)
 
-    center(
-        message,
-        math.floor(height / 2)
-    )
+    term.setCursorPos(math.floor((width - barWidth) / 2) + 1, height - 3)
+    term.write("[" .. bar .. "]")
+
+    center(tostring(current) .. " / " .. tostring(total), height - 1)
 end
 
-local function isCommandComputer()
-    return commands ~= nil
-end
-
-local function getLocalVersion()
-    if not fs.exists(
-        CURRENT_VERSION_FILE
-    ) then
-        return nil
-    end
-
-    local file =
-        fs.open(
-            CURRENT_VERSION_FILE,
-            "r"
-        )
-
-    if not file then
-        return nil
-    end
-
-    local version =
-        file.readAll()
-
-    file.close()
-
-    if not version then
-        return nil
-    end
-
-    return version:gsub("%s+", "")
-end
-
-local function getRemoteVersion()
-    local url =
-        "https://raw.githubusercontent.com/"
-        .. REPOSITORY
-        .. "/"
-        .. BRANCH
-        .. "/version.txt"
-
-    local response =
-        http.get(url)
+local function download(url)
+    local response = http.get(url)
 
     if not response then
         return nil
     end
 
-    local version =
-        response.readAll()
-
-    response.close()
-
-    if not version then
-        return nil
-    end
-
-    return version:gsub("%s+", "")
-end
-
-local function download(remote, localPath)
-    local url =
-        "https://raw.githubusercontent.com/"
-        .. REPOSITORY
-        .. "/"
-        .. BRANCH
-        .. "/"
-        .. remote
-
-    local response =
-        http.get(url)
-
-    if not response then
-        return false
-    end
-
-    local content =
-        response.readAll()
-
+    local content = response.readAll()
     response.close()
 
     if not content or #content == 0 then
-        return false
+        return nil
     end
 
-    local file =
-        fs.open(
-            localPath,
-            "w"
-        )
+    return content
+end
+
+local function writeFile(path, content)
+    local file = fs.open(path, "w")
 
     if not file then
         return false
@@ -150,135 +89,119 @@ local function download(remote, localPath)
     return true
 end
 
-local function update()
-    messageScreen(
-        "UPDATE REQUIRED",
-        "Installing latest system..."
-    )
+local function isCommandComputer()
+    return type(commands) == "table"
+        and type(commands.exec) == "function"
+end
 
-    sleep(1)
+local function fail(message)
+    clear()
 
-    local files = {
-        {
-            "startup.lua",
-            "/startup.lua"
-        },
-        {
-            "block_controller.lua",
-            "/block_controller.lua"
-        },
-        {
-            "config.lua",
-            "/config.lua"
-        },
-        {
-            "version.txt",
-            "/block_controller.version"
-        }
-    }
+    local _, height = term.getSize()
 
-    for _, file in ipairs(files) do
-        local ok =
-            download(
-                file[1],
-                file[2]
-            )
+    center("INSTALLATION FAILED", math.floor(height / 2) - 2)
+    center(message, math.floor(height / 2))
+    center("Press any key to restart.", math.floor(height / 2) + 2)
 
-        if not ok then
-            messageScreen(
-                "UPDATE FAILED",
-                "System update could not complete."
-            )
-
-            sleep(3)
-
-            return false
-        end
-    end
-
-    messageScreen(
-        "UPDATE COMPLETE",
-        "Restarting system..."
-    )
-
-    sleep(2)
+    os.pullEvent("key")
 
     os.reboot()
-
-    return true
 end
 
-local function startController()
-    while true do
-        if not fs.exists(
-            "/block_controller.lua"
-        ) then
+clear()
 
-            messageScreen(
-                "SYSTEM ERROR",
-                "Controller is missing."
-            )
+if not isCommandComputer() then
+    fail("Command Computer required.")
+end
 
-            while true do
-                os.pullEventRaw()
-            end
-        end
+if not http then
+    fail("HTTP API is disabled.")
+end
 
-        local ok =
-            pcall(function()
-                shell.run(
-                    "/block_controller.lua"
-                )
-            end)
+local testURL = "https://raw.githubusercontent.com"
 
-        if not ok then
-            sleep(1)
-        end
+local ok = pcall(function()
+    return http.checkURL(testURL)
+end)
 
-        lockedScreen()
+if not ok then
+    fail("GitHub access is unavailable.")
+end
+
+if REPOSITORY == "YOUR_GITHUB_USERNAME/YOUR_REPOSITORY" then
+    fail("GitHub repository is not configured.")
+end
+
+screen("SYSTEM INSTALLER", "Preparing installation...")
+sleep(1)
+
+local downloaded = {}
+
+for i, file in ipairs(files) do
+    clear()
+
+    local _, height = term.getSize()
+
+    center("SYSTEM INSTALLER", 3)
+    center("Downloading system files", 5)
+    center(file.remote, 7)
+
+    local url =
+        "https://raw.githubusercontent.com/"
+        .. REPOSITORY
+        .. "/"
+        .. BRANCH
+        .. "/"
+        .. file.remote
+
+    local content = download(url)
+
+    if not content then
+        fail("Download failed: " .. file.remote)
+    end
+
+    downloaded[i] = {
+        path = file.localPath,
+        content = content
+    }
+
+    progress(i, #files)
+
+    sleep(0.4)
+end
+
+clear()
+
+center("SYSTEM INSTALLER", 3)
+center("Installing components", 5)
+
+for _, file in ipairs(downloaded) do
+    local temporary = file.path .. ".install"
+
+    if not writeFile(temporary, file.content) then
+        fail("Write failed.")
     end
 end
 
-local function main()
-    if not isCommandComputer() then
-        messageScreen(
-            "SYSTEM LOCKED",
-            "Command Computer required."
-        )
+for _, file in ipairs(downloaded) do
+    local temporary = file.path .. ".install"
 
-        while true do
-            os.pullEventRaw()
-        end
+    if fs.exists(file.path) then
+        fs.delete(file.path)
     end
 
-    lockedScreen()
-
-    if not http then
-        startController()
-        return
-    end
-
-    if not http.checkURL(
-        "https://raw.githubusercontent.com"
-    ) then
-        startController()
-        return
-    end
-
-    local localVersion =
-        getLocalVersion()
-
-    local remoteVersion =
-        getRemoteVersion()
-
-    if remoteVersion
-        and localVersion ~= remoteVersion
-    then
-        update()
-        return
-    end
-
-    startController()
+    fs.move(temporary, file.path)
 end
 
-main()
+clear()
+
+center("INSTALLATION COMPLETE", 8)
+center("Restarting system...", 10)
+
+sleep(2)
+
+if fs.exists("/installer.lua") then
+    fs.delete("/installer.lua")
+end
+
+os.reboot()
