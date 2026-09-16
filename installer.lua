@@ -31,6 +31,13 @@ local function getUrl(file)
         .. tostring(os.epoch("utc"))
 end
 
+local function clear()
+    term.setBackgroundColor(colors.white)
+    term.setTextColor(colors.black)
+    term.clear()
+    term.setCursorPos(1, 1)
+end
+
 local function center(text, y)
     local width = term.getSize()
 
@@ -43,14 +50,13 @@ local function center(text, y)
 end
 
 local function screen(title, status)
-    term.setBackgroundColor(colors.white)
-    term.setTextColor(colors.black)
-    term.clear()
+    clear()
 
     local _, height = term.getSize()
+    local centerY = math.floor(height / 2)
 
-    center(title, math.floor(height / 2) - 2)
-    center(status, math.floor(height / 2) + 1)
+    center(title, centerY - 2)
+    center(status, centerY + 1)
 end
 
 local function fail(message)
@@ -58,15 +64,10 @@ local function fail(message)
     sleep(4)
 end
 
-term.setBackgroundColor(colors.white)
-term.setTextColor(colors.black)
-term.clear()
-
-local _, height = term.getSize()
-
-center("SYSTEM INSTALLER", math.floor(height / 2) - 4)
-center("Creeper Missile Placement System", math.floor(height / 2) - 2)
-center("Initializing...", math.floor(height / 2) + 1)
+screen(
+    "SYSTEM INSTALLER",
+    "Initializing..."
+)
 
 sleep(1)
 
@@ -78,7 +79,7 @@ end
 for i, file in ipairs(FILES) do
     screen(
         "SYSTEM INSTALLER",
-        "Downloading " .. file.remote .. "  [" .. i .. "/" .. #FILES .. "]"
+        "Downloading " .. file.remote .. " [" .. i .. "/" .. #FILES .. "]"
     )
 
     local success, response = pcall(
@@ -114,7 +115,7 @@ end
 
 screen(
     "INSTALLATION COMPLETE",
-    "System files installed successfully"
+    "System files installed"
 )
 
 sleep(2)
