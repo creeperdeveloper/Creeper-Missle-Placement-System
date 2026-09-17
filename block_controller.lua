@@ -16,8 +16,16 @@ local function base64(s)
   local n=a*65536+(b or 0)*256+(c or 0)
   r=r..t:sub(math.floor(n/262144)%64+1,math.floor(n/262144)%64+1)
   r=r..t:sub(math.floor(n/4096)%64+1,math.floor(n/4096)%64+1)
-  if b then r=r..t:sub(math.floor(n/64)%64+1,math.floor(n/64)%64+1)else r=r.."=" end
-  if c then r=r..t:sub(n%64+1,n%64+1)else r=r.."=" end
+  if b then
+   r=r..t:sub(math.floor(n/64)%64+1,math.floor(n/64)%64+1)
+  else
+   r=r.."="
+  end
+  if c then
+   r=r..t:sub(n%64+1,n%64+1)
+  else
+   r=r.."="
+  end
   i=i+3
  end
  return r
@@ -85,6 +93,7 @@ local function localFacing()
   if type(data.state)=="table" and data.state.facing then
    return tostring(data.state.facing)
   end
+
   if type(data.properties)=="table" and data.properties.facing then
    return tostring(data.properties.facing)
   end
@@ -103,71 +112,111 @@ local function dirVec(d)
  return vector.new(0,0,-1)
 end
 
-local function poseDirection()
- local lf=localFacing()
-
- if type(sublevel)~="table" then return nil end
- if type(sublevel.isInPlotGrid)~="function" then return nil end
- if type(sublevel.getLogicalPose)~="function" then return nil end
-
- local ok,inLevel=pcall(sublevel.isInPlotGrid)
- if not ok or not inLevel then return nil end
-
- local ok2,pose=pcall(sublevel.getLogicalPose)
- if not ok2 or type(pose)~="table" then return nil end
- if pose.orientation==nil then return nil end
-
- local ok3,v=pcall(function()
-  return pose.orientation:mul(dirVec(lf))
- end)
-
- if not ok3 or type(v)~="table" then return nil end
-
+local function dirName(v)
  local x=v.x or 0
  local y=v.y or 0
  local z=v.z or 0
+
+ local ax=math.abs(x)
+ local ay=math.abs(y)
+ local az=math.abs(z)
+
+ if ay>=ax and ay>=az then
+  if y>0 then
+   return"up"
+  else
+   return"down"
+  end
+ end
+
+ if ax>=az then
+  if x>0 then
+   return"east"
+  else
+   return"west"
+  end
+ end
+
+ if z>0 then
+  return"south"
+ else
+  return"north"
+ end
+end
+
+local function worldVector()
+ local lf=localFacing()
+
+ local ok,result=pcall(function()
+  if type(sublevel)~="table" then
+   return nil
+  end
+
+  if type(sublevel.getLogicalPose)~="function" then
+   return nil
+  end
+
+  local pose=sublevel.getLogicalPose()
+
+  if type(pose)~="table" then
+   return nil
+  end
+
+  if pose.orientation==nil then
+   return nil
+  end
+
+  local q=pose.orientation:copy()
+  local v=dirVec(lf)
+  local r=q:mul(v)
+
+  local x=r.x
+  local y=r.y
+  local z=r.z
+
+  if x==nil or y==nil or z==nil then
+   return nil
+  end
+
+  return vector.new(x,y,z)
+ end)
+
+ if ok and result then
+  return result
+ end
+
+ return dirVec(lf)
+end
+
+local function rotationFromVector(v)
+ local x=v.x or 0
+ local y=v.y or 0
+ local z=v.z or 0
+
  local h=math.sqrt(x*x+z*z)
 
- if h<0.00001 and math.abs(y)<0.00001 then return nil end
+ if h<0.000001 then
+  if y>0 then
+   return 0,-90,"up"
+  else
+   return 0,90,"down"
+  end
+ end
 
  local yaw=math.deg(math.atan(-x,z))
  local pitch=math.deg(math.atan(-y,h))
 
- return yaw,pitch
+ while yaw<=-180 do yaw=yaw+360 end
+ while yaw>180 do yaw=yaw-360 end
+
+ local f=dirName(v)
+
+ return yaw,pitch,f
 end
 
-local function executePlacement(block)
- local y,p=poseDirection()
-
- if y and p then
-  local q="execute rotated "..string.format("%.6f %.6f",y,p).." run setblock ^ ^-1 ^ "..block
-  local ok,out=commands.exec(q)
-
-  if ok then return true end
- end
-
- local q="setblock ~ ~-1 ~ "..block
- local ok,out=commands.exec(q)
-
- return ok==true
-end
-
-local function facingFromPose()
- local y,p=poseDirection()
-
- if not y then
-  return localFacing()
- end
-
- local a=((y+180)%360)-180
-
- if p>45 then return"down"end
- if p<-45 then return"up"end
-
- if a>=-45 and a<45 then return"south"end
- if a>=45 and a<135 then return"west"end
- if a>=-135 and a<-45 then return"east"end
- return"north"
+local function getDirection()
+ local v=worldVector()
+ return rotationFromVector(v)
 end
 
 local function placeBlock(side)
@@ -178,15 +227,24 @@ local function placeBlock(side)
   return
  end
 
- local dir=facingFromPose()
+ local yaw,pitch,dir=getDirection()
+
  local oriented=block.."[facing="..dir.."]"
 
- if executePlacement(oriented) then
+ local cmd="execute rotated "..string.format("%.6f %.6f",yaw,pitch).." run setblock ^ ^-1 ^ "..oriented
+
+ local ok,result=commands.exec(cmd)
+
+ if ok then
   addLog("["..names[side].."] "..block.." FACING "..dir)
   return
  end
 
- if executePlacement(block) then
+ local cmd2="execute rotated "..string.format("%.6f %.6f",yaw,pitch).." run setblock ^ ^-1 ^ "..block
+
+ local ok2,result2=commands.exec(cmd2)
+
+ if ok2 then
   addLog("["..names[side].."] "..block)
  else
   addLog("["..names[side].."] PLACEMENT FAILED")
@@ -412,13 +470,8 @@ local function main()
  addLog("SYSTEM INITIALIZED")
  addLog("CONTROLLER ONLINE")
 
- local y,p=poseDirection()
-
- if y then
-  addLog("FACING "..facingFromPose())
- else
-  addLog("FACING "..localFacing())
- end
+ local _,_,f=getDirection()
+ addLog("FACING "..f)
 
  while true do
   lockedScreen()
