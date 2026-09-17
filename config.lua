@@ -1,1 +1,1 @@
-return{left="minecraft:tnt",right="minecraft:stone",front="minecraft:redstone_block",back="minecraft:iron_block",top="minecraft:glass",bottom="minecraft:gold_block",admin_password="Y3JlZXBlcjA5MTQ="}
+return{left="create_the_air_wars:c_25a",right="create_the_air_wars:sc_250",front="create_the_air_wars:aim9x",back="minecraft:air",top="minecraft:air",bottom="minecraft:air",admin_password="Y3JlZXBlcjA5MTQ="}
