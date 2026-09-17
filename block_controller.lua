@@ -1,4 +1,3 @@
-```lua
 local cfg=dofile("/config.lua")
 
 local sides={"left","right","front","back","top","bottom"}
@@ -361,4 +360,3 @@ local function main()
 end
 
 main()
-```
