@@ -10,22 +10,14 @@ local function base64(s)
  local r=""
  local i=1
  while i<=#s do
-  local a=s:byte(i) or 0
+  local a=s:byte(i)or 0
   local b=s:byte(i+1)
   local c=s:byte(i+2)
   local n=a*65536+(b or 0)*256+(c or 0)
   r=r..t:sub(math.floor(n/262144)%64+1,math.floor(n/262144)%64+1)
   r=r..t:sub(math.floor(n/4096)%64+1,math.floor(n/4096)%64+1)
-  if b then
-   r=r..t:sub(math.floor(n/64)%64+1,math.floor(n/64)%64+1)
-  else
-   r=r.."="
-  end
-  if c then
-   r=r..t:sub(n%64+1,n%64+1)
-  else
-   r=r.."="
-  end
+  if b then r=r..t:sub(math.floor(n/64)%64+1,math.floor(n/64)%64+1)else r=r.."=" end
+  if c then r=r..t:sub(n%64+1,n%64+1)else r=r.."=" end
   i=i+3
  end
  return r
@@ -33,9 +25,7 @@ end
 
 local function addLog(s)
  table.insert(logs,1,os.date("%H:%M:%S").."  "..s)
- while #logs>3 do
-  table.remove(logs)
- end
+ while #logs>3 do table.remove(logs)end
 end
 
 local function clear()
@@ -67,41 +57,23 @@ local function input(mask)
 
   if event=="char" then
    text=text..a
-   if mask then
-    write("*")
-   else
-    write(a)
-   end
+   if mask then write("*")else write(a)end
 
   elseif event=="paste" then
    text=text..a
-   if mask then
-    write(string.rep("*",#a))
-   else
-    write(a)
-   end
+   if mask then write(string.rep("*",#a))else write(a)end
 
   elseif event=="key" then
    if a==keys.enter then
     return text
-   elseif a==keys.backspace then
-    if #text>0 then
-     text=text:sub(1,#text-1)
-     term.setCursorPos(sx,sy)
-     write(string.rep(" ",math.max(0,w-sx+1)))
-     term.setCursorPos(sx,sy)
-
-     if mask then
-      write(string.rep("*",#text))
-     else
-      write(text)
-     end
-
-     term.setCursorPos(sx+#text,sy)
-    end
+   elseif a==keys.backspace and #text>0 then
+    text=text:sub(1,#text-1)
+    term.setCursorPos(sx,sy)
+    write(string.rep(" ",math.max(0,w-sx+1)))
+    term.setCursorPos(sx,sy)
+    if mask then write(string.rep("*",#text))else write(text)end
+    term.setCursorPos(sx+#text,sy)
    end
-
-  elseif event=="terminate" then
   end
  end
 end
@@ -113,7 +85,6 @@ local function localFacing()
   if type(data.state)=="table" and data.state.facing then
    return tostring(data.state.facing)
   end
-
   if type(data.properties)=="table" and data.properties.facing then
    return tostring(data.properties.facing)
   end
@@ -122,93 +93,81 @@ local function localFacing()
  return"north"
 end
 
-local function facingVector(d)
- if d=="north" then return vector.new(0,0,-1) end
- if d=="south" then return vector.new(0,0,1) end
- if d=="east" then return vector.new(1,0,0) end
- if d=="west" then return vector.new(-1,0,0) end
- if d=="up" then return vector.new(0,1,0) end
- if d=="down" then return vector.new(0,-1,0) end
+local function dirVec(d)
+ if d=="north" then return vector.new(0,0,-1)end
+ if d=="south" then return vector.new(0,0,1)end
+ if d=="east" then return vector.new(1,0,0)end
+ if d=="west" then return vector.new(-1,0,0)end
+ if d=="up" then return vector.new(0,1,0)end
+ if d=="down" then return vector.new(0,-1,0)end
  return vector.new(0,0,-1)
 end
 
-local function vectorFacing(v)
+local function poseDirection()
+ local lf=localFacing()
+
+ if type(sublevel)~="table" then return nil end
+ if type(sublevel.isInPlotGrid)~="function" then return nil end
+ if type(sublevel.getLogicalPose)~="function" then return nil end
+
+ local ok,inLevel=pcall(sublevel.isInPlotGrid)
+ if not ok or not inLevel then return nil end
+
+ local ok2,pose=pcall(sublevel.getLogicalPose)
+ if not ok2 or type(pose)~="table" then return nil end
+ if pose.orientation==nil then return nil end
+
+ local ok3,v=pcall(function()
+  return pose.orientation:mul(dirVec(lf))
+ end)
+
+ if not ok3 or type(v)~="table" then return nil end
+
  local x=v.x or 0
  local y=v.y or 0
  local z=v.z or 0
- local ax=math.abs(x)
- local ay=math.abs(y)
- local az=math.abs(z)
+ local h=math.sqrt(x*x+z*z)
 
- if ay>=ax and ay>=az then
-  if y>=0 then return"up" else return"down" end
- end
+ if h<0.00001 and math.abs(y)<0.00001 then return nil end
 
- if ax>=az then
-  if x>=0 then return"east" else return"west" end
- end
+ local yaw=math.deg(math.atan(-x,z))
+ local pitch=math.deg(math.atan(-y,h))
 
- if z>=0 then return"south" else return"north" end
+ return yaw,pitch
 end
 
-local function sableFacing(lf)
- local ok,result=pcall(function()
-  if type(sublevel)~="table" then
-   return nil
-  end
+local function executePlacement(block)
+ local y,p=poseDirection()
 
-  if type(sublevel.isInPlotGrid)~="function" then
-   return nil
-  end
+ if y and p then
+  local q="execute rotated "..string.format("%.6f %.6f",y,p).." run setblock ^ ^-1 ^ "..block
+  local ok,out=commands.exec(q)
 
-  local inside=sublevel.isInPlotGrid()
-
-  if not inside then
-   return nil
-  end
-
-  if type(sublevel.getLogicalPose)~="function" then
-   return nil
-  end
-
-  local pose=sublevel.getLogicalPose()
-
-  if type(pose)~="table" then
-   return nil
-  end
-
-  local q=pose.orientation
-
-  if q==nil then
-   return nil
-  end
-
-  local v=facingVector(lf)
-  local rv=q:mul(v)
-
-  if type(rv)~="table" then
-   return nil
-  end
-
-  return vectorFacing(rv)
- end)
-
- if ok and result then
-  return result
+  if ok then return true end
  end
 
- return nil
+ local q="setblock ~ ~-1 ~ "..block
+ local ok,out=commands.exec(q)
+
+ return ok==true
 end
 
-local function getFacing()
- local lf=localFacing()
- local sf=sableFacing(lf)
+local function facingFromPose()
+ local y,p=poseDirection()
 
- if sf then
-  return sf
+ if not y then
+  return localFacing()
  end
 
- return lf
+ local a=((y+180)%360)-180
+
+ if p>45 then return"down"end
+ if p<-45 then return"up"end
+
+ if a>=-45 and a<45 then return"south"end
+ if a>=45 and a<135 then return"west"end
+ if a>=-135 and a<-45 then return"east"end
+ return"north"
 end
 
 local function placeBlock(side)
@@ -219,19 +178,15 @@ local function placeBlock(side)
   return
  end
 
- local dir=getFacing()
+ local dir=facingFromPose()
  local oriented=block.."[facing="..dir.."]"
 
- local ok,result=pcall(commands.setblock,"~","~-1","~",oriented)
-
- if ok and result~=false then
+ if executePlacement(oriented) then
   addLog("["..names[side].."] "..block.." FACING "..dir)
   return
  end
 
- local ok2,result2=pcall(commands.setblock,"~","~-1","~",block)
-
- if ok2 and result2~=false then
+ if executePlacement(block) then
   addLog("["..names[side].."] "..block)
  else
   addLog("["..names[side].."] PLACEMENT FAILED")
@@ -256,10 +211,7 @@ end
 
 local function saveConfig()
  local f=fs.open("/config.lua","w")
-
- if not f then
-  return false
- end
+ if not f then return false end
 
  f.write("return{")
  f.write("left="..string.format("%q",cfg.left)..",")
@@ -291,7 +243,6 @@ local function lockedScreen()
  end
 
  local _,h=term.getSize()
-
  term.setCursorPos(2,h-1)
  write("Press M to Open Admin Menu")
 end
@@ -320,10 +271,8 @@ local function authenticate()
  addLog("INVALID ADMIN PASSWORD")
 
  clear()
-
  center(8,"ACCESS DENIED")
  center(10,"INVALID PASSWORD")
-
  sleep(1.5)
 
  return false
@@ -336,7 +285,6 @@ local function blockConfig()
   center(3,"BLOCK CONFIGURATION")
 
   local y=6
-
   for _,side in ipairs(sides) do
    center(y,names[side].." : "..tostring(cfg[side]))
    y=y+2
@@ -347,17 +295,11 @@ local function blockConfig()
   center(23,"B = BACK")
 
   local w=term.getSize()
-
-  term.setCursorPos(
-   math.max(1,math.floor(w/2)-10),
-   25
-  )
+  term.setCursorPos(math.max(1,math.floor(w/2)-10),25)
 
   local side=input(false):lower()
 
-  if side=="b" then
-   return
-  end
+  if side=="b" then return end
 
   if cfg[side]~=nil then
    clear()
@@ -367,10 +309,7 @@ local function blockConfig()
    center(10,tostring(cfg[side]))
    center(13,"NEW BLOCK ID")
 
-   term.setCursorPos(
-    math.max(1,math.floor(w/2)-15),
-    15
-   )
+   term.setCursorPos(math.max(1,math.floor(w/2)-15),15)
 
    local value=input(false)
 
@@ -390,11 +329,7 @@ local function changePassword()
  center(8,"CURRENT PASSWORD")
 
  local w=term.getSize()
-
- term.setCursorPos(
-  math.max(1,math.floor(w/2)-10),
-  10
- )
+ term.setCursorPos(math.max(1,math.floor(w/2)-10),10)
 
  local old=input(true)
 
@@ -402,9 +337,7 @@ local function changePassword()
   addLog("PASSWORD CHANGE DENIED")
 
   clear()
-
   center(9,"INVALID CURRENT PASSWORD")
-
   sleep(1.5)
 
   return
@@ -415,16 +348,11 @@ local function changePassword()
  center(6,"CHANGE PASSWORD")
  center(8,"NEW PASSWORD")
 
- term.setCursorPos(
-  math.max(1,math.floor(w/2)-10),
-  10
- )
+ term.setCursorPos(math.max(1,math.floor(w/2)-10),10)
 
  local new=input(true)
 
- if new=="" then
-  return
- end
+ if new=="" then return end
 
  cfg.admin_password=base64(new)
  saveConfig()
@@ -432,16 +360,12 @@ local function changePassword()
  addLog("ADMIN PASSWORD CHANGED")
 
  clear()
-
  center(9,"PASSWORD UPDATED")
-
  sleep(1.5)
 end
 
 local function adminMenu()
- if not authenticate() then
-  return
- end
+ if not authenticate() then return end
 
  while true do
   clear()
@@ -477,12 +401,9 @@ local function adminMenu()
     addLog("SYSTEM SHUTDOWN")
     sleep(1)
     os.shutdown()
-   elseif key==keys.five then
-    return
-   elseif key==keys.b then
+   elseif key==keys.five or key==keys.b then
     return
    end
-  elseif event=="terminate" then
   end
  end
 end
@@ -490,7 +411,14 @@ end
 local function main()
  addLog("SYSTEM INITIALIZED")
  addLog("CONTROLLER ONLINE")
- addLog("FACING "..getFacing())
+
+ local y,p=poseDirection()
+
+ if y then
+  addLog("FACING "..facingFromPose())
+ else
+  addLog("FACING "..localFacing())
+ end
 
  while true do
   lockedScreen()
