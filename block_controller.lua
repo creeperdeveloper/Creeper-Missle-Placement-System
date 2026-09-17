@@ -1,51 +1,39 @@
 local cfg=dofile("/config.lua")
 
 local sides={"left","right","front","back","top","bottom"}
-local names={
- left="LEFT",
- right="RIGHT",
- front="FRONT",
- back="BACK",
- top="TOP",
- bottom="BOTTOM"
-}
-
+local names={left="LEFT",right="RIGHT",front="FRONT",back="BACK",top="TOP",bottom="BOTTOM"}
 local logs={}
 local previous={}
 
 local function base64(s)
  local t="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
  local r=""
- local bits=0
- local value=0
-
- for i=1,#s do
-  value=value*256+s:byte(i)
-  bits=bits+8
-
-  while bits>=6 do
-   bits=bits-6
-   local n=math.floor(value/2^bits)%64
-   r=r..t:sub(n+1,n+1)
+ local i=1
+ while i<=#s do
+  local a=s:byte(i) or 0
+  local b=s:byte(i+1)
+  local c=s:byte(i+2)
+  local n=a*65536+(b or 0)*256+(c or 0)
+  r=r..t:sub(math.floor(n/262144)%64+1,math.floor(n/262144)%64+1)
+  r=r..t:sub(math.floor(n/4096)%64+1,math.floor(n/4096)%64+1)
+  if b then
+   r=r..t:sub(math.floor(n/64)%64+1,math.floor(n/64)%64+1)
+  else
+   r=r.."="
   end
+  if c then
+   r=r..t:sub(n%64+1,n%64+1)
+  else
+   r=r.."="
+  end
+  i=i+3
  end
-
- if bits>0 then
-  local n=(value*2^(6-bits))%64
-  r=r..t:sub(n+1,n+1)
- end
-
- while #r%4~=0 do
-  r=r.."="
- end
-
  return r
 end
 
 local function addLog(s)
  table.insert(logs,1,os.date("%H:%M:%S").."  "..s)
-
- while #logs>7 do
+ while #logs>3 do
   table.remove(logs)
  end
 end
@@ -60,26 +48,25 @@ end
 local function center(y,s)
  local w=term.getSize()
  local x=math.floor((w-#s)/2)+1
-
- if x<1 then
-  x=1
- end
-
+ if x<1 then x=1 end
  term.setCursorPos(x,y)
  write(s)
 end
 
 local function input(mask)
- local w=term.getSize()
+ local w,h=term.getSize()
  local text=""
  local sx,sy=term.getCursorPos()
+
+ term.setCursorPos(sx,sy)
+ write(string.rep(" ",math.max(0,w-sx+1)))
+ term.setCursorPos(sx,sy)
 
  while true do
   local event,a=os.pullEventRaw()
 
   if event=="char" then
    text=text..a
-
    if mask then
     write("*")
    else
@@ -88,7 +75,6 @@ local function input(mask)
 
   elseif event=="paste" then
    text=text..a
-
    if mask then
     write(string.rep("*",#a))
    else
@@ -96,18 +82,14 @@ local function input(mask)
    end
 
   elseif event=="key" then
-
    if a==keys.enter then
     return text
 
    elseif a==keys.backspace then
-
     if #text>0 then
      text=text:sub(1,#text-1)
-
      term.setCursorPos(sx,sy)
-     write(string.rep(" ",w-sx+1))
-
+     write(string.rep(" ",math.max(0,w-sx+1)))
      term.setCursorPos(sx,sy)
 
      if mask then
@@ -118,8 +100,6 @@ local function input(mask)
 
      term.setCursorPos(sx+#text,sy)
     end
-
-   elseif a==keys.escape then
    end
 
   elseif event=="terminate" then
@@ -131,17 +111,12 @@ local function getFacing()
  local ok,data=pcall(commands.getBlockInfo,"~","~","~")
 
  if ok and type(data)=="table" then
-
-  if type(data.state)=="table" then
-   if data.state.facing then
-    return tostring(data.state.facing)
-   end
+  if type(data.state)=="table" and data.state.facing then
+   return tostring(data.state.facing)
   end
 
-  if type(data.properties)=="table" then
-   if data.properties.facing then
-    return tostring(data.properties.facing)
-   end
+  if type(data.properties)=="table" and data.properties.facing then
+   return tostring(data.properties.facing)
   end
  end
 
@@ -159,26 +134,14 @@ local function placeBlock(side)
  local dir=getFacing()
  local oriented=block.."[facing="..dir.."]"
 
- local ok,result=pcall(
-  commands.setblock,
-  "~",
-  "~-1",
-  "~",
-  oriented
- )
+ local ok,result=pcall(commands.setblock,"~","~-1","~",oriented)
 
  if ok and result~=false then
   addLog("["..names[side].."] "..block.." FACING "..dir)
   return
  end
 
- local ok2,result2=pcall(
-  commands.setblock,
-  "~",
-  "~-1",
-  "~",
-  block
- )
+ local ok2,result2=pcall(commands.setblock,"~","~-1","~",block)
 
  if ok2 and result2~=false then
   addLog("["..names[side].."] "..block)
@@ -221,7 +184,6 @@ local function saveConfig()
  f.write("}")
 
  f.close()
-
  return true
 end
 
@@ -234,7 +196,7 @@ local function lockedScreen()
  local y=12
 
  for i=#logs,1,-1 do
-  if y<=18 then
+  if y<=14 then
    center(y,logs[i])
    y=y+1
   end
@@ -260,9 +222,14 @@ local function authenticate()
   11
  )
 
+ local _,y=term.getCursorPos()
+ term.setCursorPos(math.max(1,math.floor(w/2)-10),y)
+ write(string.rep(" ",20))
+ term.setCursorPos(math.max(1,math.floor(w/2)-10),y)
+
  local password=input(true)
 
- if base64(password)==cfg.admin_password then
+ if base64(password)==tostring(cfg.admin_password) then
   addLog("ADMIN AUTHENTICATED")
   return true
  end
@@ -288,11 +255,7 @@ local function blockConfig()
   local y=6
 
   for _,side in ipairs(sides) do
-   center(
-    y,
-    names[side].." : "..tostring(cfg[side])
-   )
-
+   center(y,names[side].." : "..tostring(cfg[side]))
    y=y+2
   end
 
@@ -314,7 +277,6 @@ local function blockConfig()
   end
 
   if cfg[side]~=nil then
-
    clear()
 
    center(6,"EDIT "..names[side])
@@ -332,10 +294,7 @@ local function blockConfig()
    if value~="" then
     cfg[side]=value
     saveConfig()
-
-    addLog(
-     "CONFIG "..names[side].." UPDATED"
-    )
+    addLog("CONFIG "..names[side].." UPDATED")
    end
   end
  end
@@ -356,8 +315,7 @@ local function changePassword()
 
  local old=input(true)
 
- if base64(old)~=cfg.admin_password then
-
+ if base64(old)~=tostring(cfg.admin_password) then
   addLog("PASSWORD CHANGE DENIED")
 
   clear()
@@ -421,44 +379,27 @@ local function adminMenu()
   local event,key=os.pullEventRaw()
 
   if event=="key" then
-
    if key==keys.one then
     blockConfig()
-
    elseif key==keys.two then
     changePassword()
-
    elseif key==keys.three then
-
     clear()
-
     center(9,"RESTARTING...")
-
     addLog("SYSTEM RESTART")
-
     sleep(1)
-
     os.reboot()
-
    elseif key==keys.four then
-
     clear()
-
     center(9,"SHUTTING DOWN...")
-
     addLog("SYSTEM SHUTDOWN")
-
     sleep(1)
-
     os.shutdown()
-
    elseif key==keys.five then
     return
-
    elseif key==keys.b then
     return
    end
-
   elseif event=="terminate" then
   end
  end
@@ -470,7 +411,6 @@ local function main()
  addLog("FACING "..getFacing())
 
  while true do
-
   lockedScreen()
 
   local timer=os.startTimer(0.05)
@@ -481,11 +421,9 @@ local function main()
    if event=="timer" and a==timer then
     scanRedstone()
     break
-
    elseif event=="key" and a==keys.m then
     adminMenu()
     break
-
    elseif event=="terminate" then
    end
   end
