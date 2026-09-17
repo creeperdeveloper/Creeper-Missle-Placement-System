@@ -16,16 +16,8 @@ local function base64(s)
   local n=a*65536+(b or 0)*256+(c or 0)
   r=r..t:sub(math.floor(n/262144)%64+1,math.floor(n/262144)%64+1)
   r=r..t:sub(math.floor(n/4096)%64+1,math.floor(n/4096)%64+1)
-  if b then
-   r=r..t:sub(math.floor(n/64)%64+1,math.floor(n/64)%64+1)
-  else
-   r=r.."="
-  end
-  if c then
-   r=r..t:sub(n%64+1,n%64+1)
-  else
-   r=r.."="
-  end
+  if b then r=r..t:sub(math.floor(n/64)%64+1,math.floor(n/64)%64+1)else r=r.."="end
+  if c then r=r..t:sub(n%64+1,n%64+1)else r=r.."="end
   i=i+3
  end
  return r
@@ -66,11 +58,9 @@ local function input(mask)
   if event=="char" then
    text=text..a
    if mask then write("*")else write(a)end
-
   elseif event=="paste" then
    text=text..a
    if mask then write(string.rep("*",#a))else write(a)end
-
   elseif event=="key" then
    if a==keys.enter then
     return text
@@ -93,7 +83,6 @@ local function localFacing()
   if type(data.state)=="table" and data.state.facing then
    return tostring(data.state.facing)
   end
-
   if type(data.properties)=="table" and data.properties.facing then
    return tostring(data.properties.facing)
   end
@@ -102,7 +91,7 @@ local function localFacing()
  return"north"
 end
 
-local function dirVec(d)
+local function facingVector(d)
  if d=="north" then return vector.new(0,0,-1)end
  if d=="south" then return vector.new(0,0,1)end
  if d=="east" then return vector.new(1,0,0)end
@@ -112,43 +101,39 @@ local function dirVec(d)
  return vector.new(0,0,-1)
 end
 
-local function dirName(v)
- local x=v.x or 0
- local y=v.y or 0
- local z=v.z or 0
+local function rotateVector(v,q)
+ local ok,r=pcall(function()
+  return q:mul(v)
+ end)
 
- local ax=math.abs(x)
- local ay=math.abs(y)
- local az=math.abs(z)
-
- if ay>=ax and ay>=az then
-  if y>0 then
-   return"up"
-  else
-   return"down"
-  end
+ if not ok or not r then
+  return nil
  end
 
- if ax>=az then
-  if x>0 then
-   return"east"
-  else
-   return"west"
-  end
+ local x=r.x
+ local y=r.y
+ local z=r.z
+
+ if x==nil or y==nil or z==nil then
+  return nil
  end
 
- if z>0 then
-  return"south"
- else
-  return"north"
- end
+ return vector.new(x,y,z)
 end
 
-local function worldVector()
+local function getWorldVector()
  local lf=localFacing()
 
- local ok,result=pcall(function()
+ local ok,v=pcall(function()
   if type(sublevel)~="table" then
+   return nil
+  end
+
+  if type(sublevel.isInPlotGrid)~="function" then
+   return nil
+  end
+
+  if not sublevel.isInPlotGrid() then
    return nil
   end
 
@@ -158,65 +143,52 @@ local function worldVector()
 
   local pose=sublevel.getLogicalPose()
 
-  if type(pose)~="table" then
+  if type(pose)~="table" or not pose.orientation then
    return nil
   end
 
-  if pose.orientation==nil then
-   return nil
-  end
-
-  local q=pose.orientation:copy()
-  local v=dirVec(lf)
-  local r=q:mul(v)
-
-  local x=r.x
-  local y=r.y
-  local z=r.z
-
-  if x==nil or y==nil or z==nil then
-   return nil
-  end
-
-  return vector.new(x,y,z)
+  return rotateVector(facingVector(lf),pose.orientation)
  end)
 
- if ok and result then
-  return result
+ if ok and v then
+  return v
  end
 
- return dirVec(lf)
+ return facingVector(lf)
 end
 
-local function rotationFromVector(v)
+local function getDirection()
+ local v=getWorldVector()
+
  local x=v.x or 0
  local y=v.y or 0
  local z=v.z or 0
 
- local h=math.sqrt(x*x+z*z)
+ local ax=math.abs(x)
+ local ay=math.abs(y)
+ local az=math.abs(z)
 
- if h<0.000001 then
-  if y>0 then
+ if ay>=ax and ay>=az then
+  if y>=0 then
    return 0,-90,"up"
   else
    return 0,90,"down"
   end
  end
 
- local yaw=math.deg(math.atan(-x,z))
- local pitch=math.deg(math.atan(-y,h))
+ if ax>=az then
+  if x>0 then
+   return -90,0,"east"
+  else
+   return 90,0,"west"
+  end
+ end
 
- while yaw<=-180 do yaw=yaw+360 end
- while yaw>180 do yaw=yaw-360 end
-
- local f=dirName(v)
-
- return yaw,pitch,f
-end
-
-local function getDirection()
- local v=worldVector()
- return rotationFromVector(v)
+ if z>0 then
+  return 0,0,"south"
+ else
+  return 180,0,"north"
+ end
 end
 
 local function placeBlock(side)
@@ -229,9 +201,7 @@ local function placeBlock(side)
 
  local yaw,pitch,dir=getDirection()
 
- local oriented=block.."[facing="..dir.."]"
-
- local cmd="execute rotated "..string.format("%.6f %.6f",yaw,pitch).." run setblock ^ ^-1 ^ "..oriented
+ local cmd="execute rotated "..tostring(yaw).." "..tostring(pitch).." run setblock ^ ^-1 ^ "..block.."[facing="..dir.."]"
 
  local ok,result=commands.exec(cmd)
 
@@ -240,7 +210,7 @@ local function placeBlock(side)
   return
  end
 
- local cmd2="execute rotated "..string.format("%.6f %.6f",yaw,pitch).." run setblock ^ ^-1 ^ "..block
+ local cmd2="execute rotated "..tostring(yaw).." "..tostring(pitch).." run setblock ^ ^-1 ^ "..block
 
  local ok2,result2=commands.exec(cmd2)
 
@@ -343,6 +313,7 @@ local function blockConfig()
   center(3,"BLOCK CONFIGURATION")
 
   local y=6
+
   for _,side in ipairs(sides) do
    center(y,names[side].." : "..tostring(cfg[side]))
    y=y+2
